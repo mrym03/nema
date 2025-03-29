@@ -9,6 +9,9 @@ import {
   FlatList,
   Dimensions,
   SectionList,
+  Modal,
+  ScrollView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, Stack } from "expo-router";
@@ -31,10 +34,16 @@ import {
   Brain,
 } from "lucide-react-native";
 import { Recipe } from "@/types";
+import { usePantryStore } from "@/store/pantryStore";
 
 // Define a type for recipes with score and analysis information
 interface ScoredRecipe extends Recipe {
   score: number;
+  calculatedScore?: {
+    baseScore: number;
+    overlapBonus: number;
+    totalScore: number;
+  };
   analysis?: {
     pantryItemsUsed: number;
     newIngredients: number;
@@ -81,6 +90,7 @@ export default function MealPlannerScreen() {
   >("breakfast");
   const [isGeneratingOptimizedPlan, setIsGeneratingOptimizedPlan] =
     useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Calculate number of meals needed based on user preferences
   const mealsPerDay = preferences.mealsPerDay || 3;
@@ -162,58 +172,126 @@ export default function MealPlannerScreen() {
       // Clear existing meal plan
       clearMealPlan();
 
-      // Our goal is to minimize waste by using ingredients that expire soon
-      // And maximize ingredient overlap between meals
-      const scoredRecipes = suggestedRecipes as ScoredRecipe[];
+      // Get all pantry items with their expiry dates
+      const pantryItems = usePantryStore.getState().items;
 
-      // Create a meal plan to distribute meals across the week
-      // Ensuring variety while optimizing for waste reduction
-      for (let day = 0; day < 7; day++) {
-        // For each meal type (breakfast, lunch, dinner)
-        for (let mealIndex = 0; mealIndex < mealsPerDay; mealIndex++) {
-          const mealType = MEAL_TYPES[mealIndex] as
-            | "breakfast"
-            | "lunch"
-            | "dinner";
+      // Total number of meals needed based on user preference (default is 21 = 3 meals x 7 days)
+      const totalMealsNeeded = Math.min(
+        (preferences.mealsPerDay || 3) * 7,
+        suggestedRecipes.length
+      );
 
-          // Rescore recipes based on current meal plan
-          // This ensures that as we add meals, we prioritize recipes that
-          // leverage ingredients already being used in other meals
-          const currentPlanRecipes = [...(suggestedRecipes as ScoredRecipe[])];
+      // Track selected ingredients to apply bonus to other recipes
+      const selectedIngredients = new Set<string>();
+      // Track selected recipes to avoid duplicates
+      const selectedRecipes: ScoredRecipe[] = [];
+      // Store meals that will be added to the plan
+      const mealsToAdd: {
+        recipe: ScoredRecipe;
+        day: number;
+        mealType: string;
+      }[] = [];
 
-          // Select the top-rated recipe for this slot
-          // Skip if we've already used this recipe or a very similar one
-          const existingMealTitles = mealPlan.map((m) => m.title.toLowerCase());
+      // Clone the recipes array to manipulate scores
+      let workingRecipes = [...suggestedRecipes] as ScoredRecipe[];
 
-          let selectedRecipe = null;
-          for (let i = 0; i < Math.min(10, currentPlanRecipes.length); i++) {
-            const candidate = currentPlanRecipes[i];
-            // Skip if we've already used this recipe (or a similar-named one)
-            if (
-              !existingMealTitles.some(
-                (title) =>
-                  title.includes(candidate.title.toLowerCase()) ||
-                  candidate.title.toLowerCase().includes(title)
-              )
-            ) {
-              selectedRecipe = candidate;
-              break;
+      console.log(`Starting meal planning: Need ${totalMealsNeeded} meals`);
+
+      // Main selection loop - select one recipe at a time
+      while (
+        selectedRecipes.length < totalMealsNeeded &&
+        workingRecipes.length > 0
+      ) {
+        // Calculate scores for each recipe
+        workingRecipes = workingRecipes.map((recipe) => {
+          const recipeIngredients = getIngredientListFromRecipe(recipe);
+          let score = 0;
+
+          // Calculate base score: Sum(10 / days_left for each pantry item used)
+          for (const ingredient of recipeIngredients) {
+            const matchingPantryItems = pantryItems.filter((item) =>
+              item.name.toLowerCase().includes(ingredient.toLowerCase())
+            );
+
+            for (const pantryItem of matchingPantryItems) {
+              if (pantryItem.expiryDate) {
+                const daysLeft = getDaysUntilExpiry(pantryItem.expiryDate);
+                score += 10 / Math.max(1, daysLeft);
+              }
             }
           }
 
-          // If still no recipe found, just use the top-scored one
-          if (!selectedRecipe && currentPlanRecipes.length > 0) {
-            selectedRecipe = currentPlanRecipes[0];
+          // Add bonus for overlapping ingredients with already selected recipes
+          let overlapBonus = 0;
+          for (const ingredient of recipeIngredients) {
+            if (selectedIngredients.has(ingredient.toLowerCase())) {
+              overlapBonus += 3;
+            }
           }
 
-          // Add the selected recipe to the meal plan
-          if (selectedRecipe) {
-            // Add a small delay to allow react state updates
-            await new Promise((resolve) => setTimeout(resolve, 50));
-            addToMealPlan(selectedRecipe, day, mealType);
-          }
-        }
+          return {
+            ...recipe,
+            score: score + overlapBonus,
+            calculatedScore: {
+              baseScore: score,
+              overlapBonus: overlapBonus,
+              totalScore: score + overlapBonus,
+            },
+          };
+        });
+
+        // Sort recipes by score (highest first)
+        workingRecipes.sort((a, b) => b.score - a.score);
+
+        // Select the highest scoring recipe
+        const selectedRecipe = workingRecipes[0];
+        selectedRecipes.push(selectedRecipe);
+
+        // Remove the selected recipe from working set
+        workingRecipes = workingRecipes.filter(
+          (r) => r.id !== selectedRecipe.id
+        );
+
+        // Add the recipe's ingredients to the selected ingredients set (for future bonuses)
+        const ingredients = getIngredientListFromRecipe(selectedRecipe);
+        ingredients.forEach((ing) =>
+          selectedIngredients.add(ing.toLowerCase())
+        );
+
+        console.log(
+          `Selected recipe: ${selectedRecipe.title} with score ${selectedRecipe.score}`
+        );
+
+        // Determine which day and meal type to assign this recipe
+        const mealIndex = selectedRecipes.length - 1;
+        const day = Math.floor(mealIndex / MEAL_TYPES.length); // 0-6 for days of week
+        const mealTypeIndex = mealIndex % MEAL_TYPES.length; // 0-2 for breakfast, lunch, dinner
+        const mealType = MEAL_TYPES[mealTypeIndex] as
+          | "breakfast"
+          | "lunch"
+          | "dinner";
+
+        // Store meal to add (we'll add them all at once at the end)
+        mealsToAdd.push({
+          recipe: selectedRecipe,
+          day,
+          mealType,
+        });
       }
+
+      console.log(
+        `Selected ${selectedRecipes.length} recipes for the meal plan`
+      );
+
+      // Now add all selected meals to the meal plan
+      for (const meal of mealsToAdd) {
+        // Add a short delay between adds to allow state updates
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        addToMealPlan(meal.recipe, meal.day, meal.mealType as any);
+      }
+
+      // Navigate to the first day to show the user their meal plan
+      setActiveDay(0);
     } catch (err) {
       console.error("Error generating optimized meal plan:", err);
       Alert.alert(
@@ -223,7 +301,33 @@ export default function MealPlannerScreen() {
     } finally {
       setIsGeneratingOptimizedPlan(false);
     }
-  }, [suggestedRecipes, mealsPerDay, mealPlan, addToMealPlan, clearMealPlan]);
+  }, [suggestedRecipes, addToMealPlan, clearMealPlan, preferences.mealsPerDay]);
+
+  // Helper function to get days until expiry
+  const getDaysUntilExpiry = (expiryDate: string): number => {
+    if (!expiryDate) return 100; // Default if no expiry
+
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    return Math.max(1, diffDays); // Ensure at least 1 day
+  };
+
+  // Helper to extract ingredients from a recipe
+  const getIngredientListFromRecipe = (recipe: Recipe): string[] => {
+    if (
+      !recipe.extendedIngredients ||
+      !Array.isArray(recipe.extendedIngredients)
+    ) {
+      return [];
+    }
+
+    return recipe.extendedIngredients
+      .map((ing) => ing.name?.trim())
+      .filter((name) => name && name.length > 0) as string[];
+  };
 
   const renderMealForSlot = (
     dayIndex: number,
@@ -249,6 +353,11 @@ export default function MealPlannerScreen() {
       );
     }
 
+    // Try to find the original recipe to get detailed score info
+    const recipeDetails = suggestedRecipes.find(
+      (r) => r.id === meal.recipeId
+    ) as ScoredRecipe;
+
     return (
       <View style={styles.mealItem}>
         <Image
@@ -264,6 +373,12 @@ export default function MealPlannerScreen() {
             <Star size={14} color={Colors.warning} />
             <Text style={styles.scoreText}>{meal.score.toFixed(1)}</Text>
           </View>
+          {recipeDetails?.calculatedScore && (
+            <Text style={styles.scoreBreakdownText}>
+              ({recipeDetails.calculatedScore.baseScore.toFixed(1)} +{" "}
+              {recipeDetails.calculatedScore.overlapBonus.toFixed(1)})
+            </Text>
+          )}
         </View>
         <TouchableOpacity
           style={styles.removeMealButton}
@@ -334,6 +449,14 @@ export default function MealPlannerScreen() {
                 </View>
               </View>
               <View style={styles.analysisContainer}>
+                {item.calculatedScore && (
+                  <View style={styles.scoreBreakdownContainer}>
+                    <Text style={styles.scoreBreakdownText}>
+                      Score: Base {item.calculatedScore.baseScore.toFixed(1)} +
+                      Overlap {item.calculatedScore.overlapBonus.toFixed(1)}
+                    </Text>
+                  </View>
+                )}
                 {item.analysis && item.analysis.pantryItemsUsed > 0 && (
                   <View style={styles.analysisItem}>
                     <CheckCircle2 size={12} color={Colors.success} />
@@ -429,6 +552,84 @@ export default function MealPlannerScreen() {
     );
   };
 
+  // Add a help modal to explain the scoring system
+  const renderHelpModal = () => {
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showHelpModal}
+        onRequestClose={() => setShowHelpModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>How Recipe Scoring Works</Text>
+
+            <ScrollView style={styles.modalScrollView}>
+              <Text style={styles.modalSubtitle}>
+                Our Goal: Minimize Food Waste
+              </Text>
+              <Text style={styles.modalText}>
+                The meal planner uses a special algorithm to create a meal plan
+                that helps reduce food waste by prioritizing ingredients that
+                will expire soon.
+              </Text>
+
+              <Text style={styles.modalSubtitle}>Recipe Scoring Formula:</Text>
+              <Text style={styles.formulaText}>
+                Base Score = Sum(10 / days_left) for each pantry item
+              </Text>
+              <Text style={styles.modalText}>
+                Recipes using ingredients that will expire sooner get higher
+                scores. For example, an ingredient expiring in 2 days adds 5
+                points, while one expiring in 10 days adds only 1 point.
+              </Text>
+
+              <Text style={styles.modalSubtitle}>
+                Ingredient Overlap Bonus:
+              </Text>
+              <Text style={styles.formulaText}>
+                +3 points for each shared ingredient with other selected meals
+              </Text>
+              <Text style={styles.modalText}>
+                As recipes are selected, other recipes that use the same
+                ingredients get bonus points. This encourages efficient use of
+                ingredients across multiple meals.
+              </Text>
+
+              <Text style={styles.modalSubtitle}>Selection Process:</Text>
+              <Text style={styles.modalText}>
+                1. Calculate scores for all recipes
+              </Text>
+              <Text style={styles.modalText}>
+                2. Select the recipe with highest score
+              </Text>
+              <Text style={styles.modalText}>
+                3. Add +3 point bonus to remaining recipes for each shared
+                ingredient
+              </Text>
+              <Text style={styles.modalText}>
+                4. Repeat until we have filled the meal plan
+              </Text>
+
+              <Text style={styles.modalSubtitle}>Score Breakdown:</Text>
+              <Text style={styles.modalText}>
+                Each recipe shows its score as (Base + Overlap Bonus)
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowHelpModal(false)}
+            >
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen
@@ -455,12 +656,20 @@ export default function MealPlannerScreen() {
             <Brain size={20} color={Colors.primary} />
           </TouchableOpacity>
         )}
+        <TouchableOpacity
+          style={styles.helpButton}
+          onPress={() => setShowHelpModal(true)}
+        >
+          <Info size={20} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.instructions}>
         <Text style={styles.instructionsText}>
-          Your meal plan is optimized to reduce food waste by using pantry items
-          before they expire.
+          Your meal plan is optimized to reduce food waste by prioritizing
+          ingredients that will expire soon. Recipes are scored based on: (1)
+          how soon their ingredients expire and (2) ingredient overlap with
+          other meals to minimize waste.
         </Text>
         <TouchableOpacity
           style={styles.optimizeMealPlanButton}
@@ -514,6 +723,8 @@ export default function MealPlannerScreen() {
         stickySectionHeadersEnabled={false}
         contentContainerStyle={styles.sectionListContent}
       />
+
+      {renderHelpModal()}
     </SafeAreaView>
   );
 }
@@ -784,5 +995,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.danger,
     fontWeight: "bold",
+  },
+  scoreBreakdownContainer: {
+    marginVertical: 2,
+  },
+  scoreBreakdownText: {
+    fontSize: 10,
+    color: Colors.textLight,
+    fontStyle: "italic",
+  },
+  helpButton: {
+    padding: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    width: "100%",
+    maxHeight: "80%",
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: Colors.text,
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  modalScrollView: {
+    maxHeight: "85%",
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: Colors.primary,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  formulaText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.success,
+    backgroundColor: Colors.primaryLight,
+    padding: 8,
+    borderRadius: 8,
+    marginVertical: 8,
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  closeButton: {
+    backgroundColor: Colors.primary,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  closeButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

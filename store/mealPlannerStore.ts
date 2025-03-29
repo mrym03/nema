@@ -14,6 +14,11 @@ export interface MealPlanItem {
   mealType: "breakfast" | "lunch" | "dinner";
   score: number;
   ingredients: string[];
+  calculatedScore?: {
+    baseScore: number;
+    overlapBonus: number;
+    totalScore: number;
+  };
 }
 
 // Define the store state
@@ -145,6 +150,9 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
   },
 
   addToMealPlan: (recipe, dayIndex, mealType) => {
+    // Include calculated score in the meal plan item if available
+    const calculatedScore = (recipe as any).calculatedScore;
+
     const newMeal: MealPlanItem = {
       id: generateId(),
       recipeId: recipe.id,
@@ -158,6 +166,7 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
             .map((ing) => ing.name?.toLowerCase() || "")
             .filter((name) => name)
         : [],
+      ...(calculatedScore ? { calculatedScore } : {}),
     };
 
     // Check if a meal already exists for this slot and replace it
