@@ -178,10 +178,32 @@ export const fetchRecipesByIngredients = async (
       "Starter",
     ];
 
-    for (const category of categories) {
+    // Filter categories based on user preferences
+    const selectedCategories = dietaryPreferences
+      .filter((pref) =>
+        [
+          "breakfast",
+          "pasta",
+          "seafood",
+          "dessert",
+          "side",
+          "starter",
+        ].includes(pref)
+      )
+      .map((pref) => pref.charAt(0).toUpperCase() + pref.slice(1));
+
+    // Always check for vegetarian/vegan categories separately
+    const hasVegetarian = dietaryPreferences.includes("vegetarian");
+    const hasVegan = dietaryPreferences.includes("vegan");
+
+    // If user selected specific categories, use those instead of the default list
+    const categoriesToSearch =
+      selectedCategories.length > 0 ? selectedCategories : categories;
+
+    for (const category of categoriesToSearch) {
       // Skip categories that don't match dietary preferences
       if (
-        dietaryPreferences.includes("vegetarian") &&
+        hasVegetarian &&
         (category === "Chicken" ||
           category === "Beef" ||
           category === "Seafood")
@@ -305,14 +327,6 @@ export const fetchRecipesByIngredients = async (
         "lamb",
       ];
       const dairyIngredients = ["milk", "cheese", "cream", "yogurt", "butter"];
-      const glutenIngredients = [
-        "wheat",
-        "barley",
-        "rye",
-        "flour",
-        "bread",
-        "biscuit",
-      ];
 
       const filteredByDiet = detailedMeals.filter((meal) => {
         const mealIngredients: string[] = [];
@@ -340,16 +354,6 @@ export const fetchRecipesByIngredients = async (
               (ing) =>
                 nonVegIngredients.some((nonVeg) => ing.includes(nonVeg)) ||
                 dairyIngredients.some((dairy) => ing.includes(dairy))
-            )
-          ) {
-            return false;
-          }
-        }
-
-        if (dietaryPreferences.includes("gluten free")) {
-          if (
-            mealIngredients.some((ing) =>
-              glutenIngredients.some((gluten) => ing.includes(gluten))
             )
           ) {
             return false;

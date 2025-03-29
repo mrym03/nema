@@ -30,39 +30,38 @@ const dietOptions: DietOption[] = [
     description: "No animal products whatsoever",
   },
   {
-    id: "glutenFree",
-    label: "Gluten Free",
-    description: "No wheat, barley, or rye",
+    id: "breakfast",
+    label: "Breakfast",
+    description: "Morning meals and breakfast foods",
   },
   {
-    id: "dairyFree",
-    label: "Dairy Free",
-    description: "No milk, cheese, or other dairy products",
+    id: "dessert",
+    label: "Desserts",
+    description: "Sweet treats and dessert recipes",
   },
   {
-    id: "ketogenic",
-    label: "Keto",
-    description: "High fat, moderate protein, very low carb",
+    id: "pasta",
+    label: "Pasta",
+    description: "Pasta dishes and noodle-based recipes",
   },
   {
-    id: "lowCarb",
-    label: "Low Carb",
-    description: "Reduced carbohydrate intake",
+    id: "seafood",
+    label: "Seafood",
+    description: "Fish and seafood dishes",
   },
   {
-    id: "pescatarian",
-    label: "Pescatarian",
-    description: "No meat except for fish and seafood",
+    id: "side",
+    label: "Side Dishes",
+    description: "Accompaniments and side dishes",
   },
   {
-    id: "paleo",
-    label: "Paleo",
-    description:
-      "Based on foods presumed to be eaten during the Paleolithic era",
+    id: "starter",
+    label: "Starters",
+    description: "Appetizers and first courses",
   },
 ];
 
-export default function DietaryPreferencesScreen() {
+export default function MealPreferencesScreen() {
   const { preferences, setDietaryPreferences } = usePreferences();
   const [selectedDiets, setSelectedDiets] = useState<DietaryPreference[]>(
     preferences.dietaryPreferences
@@ -91,11 +90,10 @@ export default function DietaryPreferencesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>
-          What are your dietary preferences for today?
-        </Text>
+        <Text style={styles.title}>Meal Preferences</Text>
         <Text style={styles.subtitle}>
-          We'll customize your recipe recommendations based on these choices
+          Select dietary preferences and meal types to customize your recipe
+          recommendations
         </Text>
       </View>
 
