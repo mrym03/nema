@@ -264,17 +264,20 @@ export default function MealPlannerScreen() {
 
         // Determine which day and meal type to assign this recipe
         const mealIndex = selectedRecipes.length - 1;
-        const day = Math.floor(mealIndex / MEAL_TYPES.length); // 0-6 for days of week
-        const mealTypeIndex = mealIndex % MEAL_TYPES.length; // 0-2 for breakfast, lunch, dinner
+        const day = Math.floor(mealIndex / mealsPerDay); // 0-6 for days of week
+        const mealTypeIndex = mealIndex % mealsPerDay; // 0-2 for breakfast, lunch, dinner
         const mealType = MEAL_TYPES[mealTypeIndex] as
           | "breakfast"
           | "lunch"
           | "dinner";
 
+        // Make sure we don't exceed valid day range (0-6)
+        const validDay = Math.min(day, 6);
+
         // Store meal to add (we'll add them all at once at the end)
         mealsToAdd.push({
           recipe: selectedRecipe,
-          day,
+          day: validDay,
           mealType,
         });
       }
