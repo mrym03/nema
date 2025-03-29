@@ -60,19 +60,50 @@ export default function AddItemScreen() {
   );
   const [multiScanItemsData, setMultiScanItemsData] = useState<Array<{name: string, category: FoodCategory}>>([]);
   
-  // To prevent infinite navigation loops
-  const hasInitializedRef = useRef(false);
-  
   // Initialize multi-scan items data if available
   useEffect(() => {
-    if (params.multiScanItemsData && !hasInitializedRef.current) {
+    console.log('Initializing with params:', JSON.stringify(params, null, 2));
+    
+    if (params.multiScanItemsData) {
       try {
-        const itemsData = JSON.parse(params.multiScanItemsData.toString());
-        setMultiScanItemsData(itemsData);
-        console.log('Loaded multi-scan items data:', itemsData);
-        hasInitializedRef.current = true;
+        const itemsDataString = params.multiScanItemsData.toString();
+        console.log('Raw multiScanItemsData string length:', itemsDataString.length);
+        
+        const itemsData = JSON.parse(itemsDataString);
+        console.log('Parsed multiScanItemsData, found', itemsData.length, 'items');
+        
+        if (Array.isArray(itemsData) && itemsData.length > 0) {
+          console.log('Setting multiScanItemsData with', itemsData.length, 'items');
+          setMultiScanItemsData(itemsData);
+          
+          // Also update multiScanTotalItems and multiScanCurrentIndex from params
+          if (params.multiScanTotalItems) {
+            const totalItems = Number(params.multiScanTotalItems);
+            console.log('Setting multiScanTotalItems to', totalItems);
+            setMultiScanTotalItems(totalItems);
+          }
+          
+          if (params.multiScanCurrentIndex) {
+            const currentIndex = Number(params.multiScanCurrentIndex);
+            console.log('Setting multiScanCurrentIndex to', currentIndex);
+            setMultiScanCurrentIndex(currentIndex);
+            
+            // Get the current item data
+            if (currentIndex < itemsData.length) {
+              const currentItem = itemsData[currentIndex];
+              console.log('Setting fields from currentItem:', currentItem);
+              setName(currentItem.name || '');
+              if (currentItem.category && validCategories.includes(currentItem.category)) {
+                setCategory(currentItem.category);
+              }
+            }
+          }
+        } else {
+          console.error('Invalid multiScanItemsData format:', itemsData);
+        }
       } catch (error) {
         console.error('Failed to parse multiScanItemsData:', error);
+        console.error('Raw data causing parse error:', params.multiScanItemsData);
       }
     }
     
@@ -83,32 +114,20 @@ export default function AddItemScreen() {
         setMultiItemScannerVisible(true);
       }, 300);
     }
-  }, [params.multiScanItemsData, params.openMultiItemScanner]);
+  }, [params.multiScanItemsData, params.multiScanCurrentIndex, params.multiScanTotalItems, params.openMultiItemScanner, params.forceUpdate]);
   
   // Update form fields when params change (particularly important for navigation between items)
   useEffect(() => {
-    console.log('Params changed, updating form fields:', JSON.stringify(params, null, 2));
+    // We don't need to update everything here since the main initialization now handles this
+    // This is just for extra fields not directly related to the multiScanItemsData
     
-    // Update name if provided in params
-    if (params.name) {
-      const newName = params.name.toString();
-      console.log('Setting name to:', newName);
-      setName(newName);
+    // Update isFromMultiScan flag
+    if (params.isFromMultiScan === "true") {
+      console.log('Setting isFromMultiScan to true');
+      setIsFromMultiScan(true);
     }
     
-    // Update category if provided in params and valid
-    if (params.category) {
-      const newCategory = params.category.toString() as FoodCategory;
-      if (validCategories.includes(newCategory)) {
-        console.log('Setting category to:', newCategory);
-        setCategory(newCategory);
-      } else {
-        console.log('Invalid category received:', newCategory, 'defaulting to "other"');
-        setCategory('other');
-      }
-    }
-    
-    // Update other fields if provided
+    // Update quantity, unit, and notes if they're in params but not in the multiScanItemsData
     if (params.quantity) {
       setQuantity(params.quantity.toString());
     }
@@ -124,21 +143,7 @@ export default function AddItemScreen() {
     if (params.notes) {
       setNotes(params.notes.toString());
     }
-    
-    // Update multi-scan related fields
-    if (params.isFromMultiScan === "true") {
-      setIsFromMultiScan(true);
-    }
-    
-    if (params.multiScanTotalItems) {
-      setMultiScanTotalItems(Number(params.multiScanTotalItems));
-    }
-    
-    if (params.multiScanCurrentIndex) {
-      setMultiScanCurrentIndex(Number(params.multiScanCurrentIndex));
-    }
-  }, [params.name, params.category, params.quantity, params.unit, params.expiryDate, params.notes, 
-      params.isFromMultiScan, params.multiScanTotalItems, params.multiScanCurrentIndex, params.forceUpdate]);
+  }, [params.isFromMultiScan, params.quantity, params.unit, params.expiryDate, params.notes]);
   
   const handleSave = () => {
     if (!name.trim()) {
@@ -160,17 +165,38 @@ export default function AddItemScreen() {
     if (isFromMultiScan) {
       const nextIndex = multiScanCurrentIndex + 1;
       console.log(`Moving to item ${nextIndex + 1}/${multiScanTotalItems}`);
+      console.log('multiScanItemsData:', JSON.stringify(multiScanItemsData));
       
-      if (nextIndex < multiScanTotalItems) {
-        // Store current item name for the alert
+      if (nextIndex < multiScanTotalItems && multiScanItemsData && multiScanItemsData.length > nextIndex) {
+        // Get the next item's data
+        const nextItem = multiScanItemsData[nextIndex];
+        console.log('Next item data:', nextItem);
+        
+        // Store the current name for the alert message
         const currentName = name;
         
-        // Show confirmation and navigate to next item
-        Alert.alert(
-          'Item Saved',
-          `"${currentName}" has been added to your pantry.`,
-          [{ text: 'Next Item', onPress: () => setMultiScanCurrentIndex(prevIndex => prevIndex + 1) }]
-        );
+        // First navigate to the next item - don't put this inside the Alert callback
+        router.replace({
+          pathname: "/add-item",
+          params: {
+            name: nextItem.name,
+            category: nextItem.category,
+            isFromMultiScan: "true",
+            multiScanCurrentIndex: nextIndex.toString(),
+            multiScanTotalItems: multiScanTotalItems.toString(),
+            multiScanItemsData: JSON.stringify(multiScanItemsData),
+            forceUpdate: Date.now().toString()
+          }
+        });
+        
+        // Then show the confirmation alert (without navigation in the callback)
+        setTimeout(() => {
+          Alert.alert(
+            'Item Saved',
+            `"${currentName}" has been added to your pantry.`,
+            [{ text: 'OK', style: 'default' }]
+          );
+        }, 300);
       } else {
         // This was the last item, go back to main screen
         Alert.alert('Success', `All ${multiScanTotalItems} items have been added to your pantry.`);

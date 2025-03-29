@@ -70,29 +70,43 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
       return;
     }
     
-    // Close scanner modal
+    // First close the modal - this needs to be done before navigation
     onClose();
     
-    // Short delay to ensure modal is closed
+    // Use a timeout to ensure the modal is fully closed before navigation
     setTimeout(() => {
-      // Navigate to add-item screen with the first item data
-      // and pass all items data for sequential processing
-      console.log('Navigating to add item with first item:', selectedItems[0]);
-      console.log('Total items:', selectedItems.length);
-      
-      router.replace({
-        pathname: "/add-item",
-        params: {
-          name: selectedItems[0].name,
-          category: selectedItems[0].category,
-          isFromMultiScan: "true",
-          multiScanCurrentIndex: "0",
-          multiScanTotalItems: selectedItems.length.toString(),
-          multiScanItemsData: JSON.stringify(selectedItems),
-          forceUpdate: Date.now().toString() // Force update to ensure fresh rendering
-        }
-      });
-    }, 300);
+      try {
+        // Stringify the items data once
+        const itemsDataString = JSON.stringify(selectedItems);
+        console.log('Prepared items data string of length:', itemsDataString.length);
+        
+        // Navigate to add-item screen with the first item data
+        console.log('Navigating to add-item with:', {
+          first_item: selectedItems[0],
+          total_items: selectedItems.length
+        });
+        
+        // Navigate to the add-item screen
+        router.push({
+          pathname: "/add-item",
+          params: {
+            name: selectedItems[0].name,
+            category: selectedItems[0].category,
+            isFromMultiScan: "true",
+            multiScanCurrentIndex: "0",
+            multiScanTotalItems: selectedItems.length.toString(),
+            multiScanItemsData: itemsDataString,
+            forceUpdate: Date.now().toString() // Force a refresh
+          }
+        });
+      } catch (error) {
+        console.error('Error during navigation:', error);
+        Alert.alert(
+          'Navigation Error', 
+          'There was a problem starting the item review process. Please try again.'
+        );
+      }
+    }, 1000); // Longer delay to ensure modal is fully closed
   };
 
   const toggleItemSelection = (index: number) => {
