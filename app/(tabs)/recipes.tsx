@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   ShoppingCart,
   List,
+  Calendar,
 } from "lucide-react-native";
 
 // Conditional imports to handle potential errors
@@ -140,8 +141,8 @@ export default function RecipesScreen() {
     });
   };
 
-  const handleViewShoppingList = () => {
-    router.push("/shopping-list");
+  const handleViewMealPlanner = () => {
+    router.push("/meal-planner");
   };
 
   const renderItem = useCallback(
@@ -261,11 +262,11 @@ export default function RecipesScreen() {
         {selectedRecipes.length > 0 && (
           <TouchableOpacity
             style={styles.shoppingListButton}
-            onPress={handleViewShoppingList}
+            onPress={handleViewMealPlanner}
           >
-            <ShoppingCart size={20} color="#FFFFFF" />
+            <Calendar size={20} color="#FFFFFF" />
             <Text style={styles.shoppingListButtonText}>
-              View Shopping List ({selectedRecipes.length})
+              Create Weekly Meal Plan ({selectedRecipes.length})
             </Text>
           </TouchableOpacity>
         )}
