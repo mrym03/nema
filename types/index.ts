@@ -37,6 +37,18 @@ export interface Recipe {
   usedIngredientCount: number;
   missedIngredientCount: number;
   likes: number;
+  instructions?: string;
+  extendedIngredients?: RecipeIngredient[];
+}
+
+export interface RecipeIngredient {
+  id?: number;
+  name?: string;
+  originalName?: string;
+  amount?: number;
+  unit?: string;
+  aisle?: string;
+  original?: string;
 }
 
 export interface ShoppingListItem {

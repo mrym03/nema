@@ -42,7 +42,8 @@ const convertBlobToBase64 = (blob: Blob): Promise<string> => {
 // Identify the food item in an image using OpenAI's Vision model
 export const identifyFoodWithOpenAI = async (imageUri: string): Promise<{
   name: string,
-  category: FoodCategory
+  category: FoodCategory,
+  quantity: number
 }> => {
   try {
     console.log("Starting OpenAI Vision API process...");
@@ -60,7 +61,7 @@ export const identifyFoodWithOpenAI = async (imageUri: string): Promise<{
           content: [
             {
               type: "text",
-              text: "You are a food recognition AI. Analyze this image and identify what food item is shown. IMPORTANT: Be very specific and accurate. DO NOT default to common items like milk or dairy without clear evidence. If you're uncertain, identify based on what you see. Only respond with the exact food name and its category in this format: 'Item: [food name], Category: [category]'. Valid categories are strictly limited to: fruits, vegetables, dairy, meat, seafood, grains, bakery, canned, frozen, snacks, beverages, condiments, spices, or other."
+              text: "You are a food recognition AI. Analyze this image and identify what food item is shown. IMPORTANT: Be very specific and accurate. DO NOT default to common items like milk or dairy without clear evidence. If you're uncertain, identify based on what you see. Count the number of items if multiple are present (e.g., 3 apples, 6 eggs, 2 bananas). Only respond with the exact food name, its category, and quantity in this format: 'Item: [food name], Category: [category], Quantity: [number]'. For items that aren't naturally countable (like milk, rice, etc.), use 1 as the quantity. Valid categories are strictly limited to: fruits, vegetables, dairy, meat, seafood, grains, bakery, canned, frozen, snacks, beverages, condiments, spices, or other."
             },
             {
               type: "image_url",
@@ -90,14 +91,19 @@ export const identifyFoodWithOpenAI = async (imageUri: string): Promise<{
     const responseText = response.data.choices[0]?.message?.content || '';
     console.log("Raw API response:", responseText);
     
-    // Parse the response to extract food name and category
+    // Parse the response to extract food name, category, and quantity
     const itemMatch = responseText.match(/Item:\s*([^,\n]+)/i);
     const categoryMatch = responseText.match(/Category:\s*([^,\n]+)/i);
+    const quantityMatch = responseText.match(/Quantity:\s*(\d+)/i);
     
     let foodName = itemMatch ? itemMatch[1].trim() : 'Unknown Food';
     let rawCategory = categoryMatch ? categoryMatch[1].trim().toLowerCase() : 'other';
+    let quantity = quantityMatch ? parseInt(quantityMatch[1], 10) : 1;
     
-    console.log(`Extracted food name: "${foodName}", category: "${rawCategory}"`);
+    // Ensure quantity is at least 1
+    quantity = quantity > 0 ? quantity : 1;
+    
+    console.log(`Extracted food name: "${foodName}", category: "${rawCategory}", quantity: ${quantity}`);
     
     // Validate the category
     const validCategories: FoodCategory[] = [
@@ -132,11 +138,12 @@ export const identifyFoodWithOpenAI = async (imageUri: string): Promise<{
       foodCategory = 'other';
     }
     
-    console.log(`Final result - Name: "${foodName}", Category: "${foodCategory}"`);
+    console.log(`Final result - Name: "${foodName}", Category: "${foodCategory}", Quantity: ${quantity}`);
     
     return {
       name: foodName,
-      category: foodCategory as FoodCategory
+      category: foodCategory as FoodCategory,
+      quantity: quantity
     };
   } catch (error: any) {
     console.error('Error identifying food with OpenAI:', 
@@ -152,7 +159,7 @@ export const identifyFoodWithOpenAI = async (imageUri: string): Promise<{
  */
 export async function identifyMultipleFoodItemsWithOpenAI(
   imageUri: string
-): Promise<Array<{ name: string; category: FoodCategory }>> {
+): Promise<Array<{ name: string; category: FoodCategory; quantity: number }>> {
   try {
     console.log("Starting multiple food item identification with OpenAI Vision API...");
     
@@ -170,19 +177,22 @@ export async function identifyMultipleFoodItemsWithOpenAI(
           Your task is to analyze the image and list ALL food items visible, providing:
           1. The name of each food item
           2. Its appropriate food category
+          3. The quantity of the item (count how many of each item are present)
           
           Valid food categories are: fruits, vegetables, dairy, meat, seafood, grains, bakery, canned, frozen, snacks, beverages, condiments, spices, other.
           
-          Format your response as a JSON array with objects containing "name" and "category" for each item. 
-          Example: [{"name": "Apple", "category": "fruits"}, {"name": "Bread", "category": "bakery"}]
+          Format your response as a JSON array with objects containing "name", "category", and "quantity" for each item. 
+          Example: [{"name": "Apple", "category": "fruits", "quantity": 3}, {"name": "Bread", "category": "bakery", "quantity": 1}]
           
           If you're uncertain about an item, list it as "other" category.
+          For items that can't be counted individually (like milk or rice), use quantity: 1.
+          Count accurately when multiple of the same item are visible (e.g., a bunch of bananas should be counted as the number of individual bananas).
           Identify as many distinct items as you can see in the image.`
         },
         {
           role: "user",
           content: [
-            { type: "text", text: "What food items do you see in this image? Please identify each food item and its category." },
+            { type: "text", text: "What food items do you see in this image? Please identify each food item, its category, and how many of each item you see." },
             {
               type: "image_url",
               image_url: {
@@ -258,9 +268,15 @@ export async function identifyMultipleFoodItemsWithOpenAI(
         
         const category = validCategories.includes(validCategory) ? validCategory : 'other';
         
+        // Ensure quantity is at least 1
+        const quantity = item.quantity && Number.isInteger(item.quantity) && item.quantity > 0 
+          ? item.quantity 
+          : 1;
+        
         return {
           name: item.name || "Unknown Food Item",
-          category
+          category,
+          quantity
         };
       });
       

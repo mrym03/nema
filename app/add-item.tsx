@@ -14,6 +14,7 @@ import OCRScanner from '@/components/OCRScanner';
 import ProductScanner from '@/components/ProductScanner';
 import MultiItemScanner from '@/components/MultiItemScanner';
 import Constants from 'expo-constants';
+import { Image } from 'expo-image';
 
 export default function AddItemScreen() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function AddItemScreen() {
     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
   const [notes, setNotes] = useState(params.notes ? params.notes.toString() : '');
+  const [imageUrl, setImageUrl] = useState(params.imageUrl ? params.imageUrl.toString() : '');
   
   // Other state variables
   const [isBarcodeModalVisible, setBarcodeModalVisible] = useState(false);
@@ -58,7 +60,7 @@ export default function AddItemScreen() {
   const [multiScanCurrentIndex, setMultiScanCurrentIndex] = useState(
     params.multiScanCurrentIndex ? Number(params.multiScanCurrentIndex) : 0
   );
-  const [multiScanItemsData, setMultiScanItemsData] = useState<Array<{name: string, category: FoodCategory}>>([]);
+  const [multiScanItemsData, setMultiScanItemsData] = useState<Array<{name: string, category: FoodCategory, imageUrl?: string, quantity?: number}>>([]);
   
   // Initialize multi-scan items data if available
   useEffect(() => {
@@ -95,6 +97,12 @@ export default function AddItemScreen() {
               setName(currentItem.name || '');
               if (currentItem.category && validCategories.includes(currentItem.category)) {
                 setCategory(currentItem.category);
+              }
+              if (currentItem.imageUrl) {
+                setImageUrl(currentItem.imageUrl);
+              }
+              if (currentItem.quantity) {
+                setQuantity(currentItem.quantity.toString());
               }
             }
           }
@@ -143,7 +151,11 @@ export default function AddItemScreen() {
     if (params.notes) {
       setNotes(params.notes.toString());
     }
-  }, [params.isFromMultiScan, params.quantity, params.unit, params.expiryDate, params.notes]);
+    
+    if (params.imageUrl) {
+      setImageUrl(params.imageUrl.toString());
+    }
+  }, [params.isFromMultiScan, params.quantity, params.unit, params.expiryDate, params.notes, params.imageUrl]);
   
   const handleSave = () => {
     if (!name.trim()) {
@@ -159,6 +171,7 @@ export default function AddItemScreen() {
       unit: unit.trim() || 'item',
       expiryDate: new Date(`${expiryDate}T00:00:00`).toISOString(),
       notes: notes.trim(),
+      imageUrl: imageUrl.trim() || undefined,
     });
     
     // If this is part of a multi-scan workflow
@@ -181,6 +194,8 @@ export default function AddItemScreen() {
           params: {
             name: nextItem.name,
             category: nextItem.category,
+            quantity: nextItem.quantity?.toString() || "1",
+            imageUrl: nextItem.imageUrl,
             isFromMultiScan: "true",
             multiScanCurrentIndex: nextIndex.toString(),
             multiScanTotalItems: multiScanTotalItems.toString(),
@@ -221,6 +236,7 @@ export default function AddItemScreen() {
             setCategory('dairy');
             setQuantity('1');
             setUnit('liter');
+            setImageUrl('https://images.unsplash.com/photo-1563636619-e9143da7973b?q=80&w=300'); // Add milk image
           }
         },
         {
@@ -320,6 +336,18 @@ export default function AddItemScreen() {
               </View>
             )}
             
+            {/* Show image preview if available */}
+            {imageUrl ? (
+              <View style={styles.imagePreviewContainer}>
+                <Image 
+                  source={imageUrl}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                  transition={300}
+                />
+              </View>
+            ) : null}
+            
             <View style={styles.formGroup}>
               <Text style={styles.label}>Name</Text>
               <TextInput
@@ -370,7 +398,7 @@ export default function AddItemScreen() {
                   value={expiryDate}
                   onChangeText={setExpiryDate}
                 />
-                <Calendar size={20} color={Colors.textLight} />
+                <Calendar size={24} color={Colors.text} />
               </View>
             </View>
             
@@ -442,7 +470,7 @@ export default function AddItemScreen() {
                       style={styles.scanOption}
                       onPress={handleBarcodeScan}
                     >
-                      <Barcode size={24} color={Colors.icon} />
+                      <Barcode size={24} color={Colors.text} />
                       <Text style={styles.scanOptionText}>Scan Barcode</Text>
                     </TouchableOpacity>
                     
@@ -453,7 +481,7 @@ export default function AddItemScreen() {
                         setOCRModalVisible(true);
                       }}
                     >
-                      <Calendar size={24} color={Colors.icon} />
+                      <Calendar size={24} color={Colors.text} />
                       <Text style={styles.scanOptionText}>Scan Expiry Date (OCR)</Text>
                     </TouchableOpacity>
                     
@@ -464,7 +492,7 @@ export default function AddItemScreen() {
                         setProductScannerVisible(true);
                       }}
                     >
-                      <ShoppingBag size={24} color={Colors.icon} />
+                      <ShoppingBag size={24} color={Colors.text} />
                       <Text style={styles.scanOptionText}>Identify Product</Text>
                     </TouchableOpacity>
                     
@@ -475,7 +503,7 @@ export default function AddItemScreen() {
                         setMultiItemScannerVisible(true);
                       }}
                     >
-                      <Layers size={24} color={Colors.icon} />
+                      <Layers size={24} color={Colors.text} />
                       <Text style={styles.scanOptionText}>Scan Multiple Items</Text>
                     </TouchableOpacity>
                   </View>
@@ -484,7 +512,7 @@ export default function AddItemScreen() {
                     style={styles.scanMenuButton}
                     onPress={() => setScanMenuVisible(true)}
                   >
-                    <ChevronsUp size={24} color={Colors.textLight} />
+                    <ChevronsUp size={24} color={Colors.text} />
                     <Text style={styles.scanMenuButtonText}>Scan</Text>
                   </TouchableOpacity>
                 )}
@@ -622,18 +650,22 @@ const styles = StyleSheet.create({
   scanMenuButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.card,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  scanMenuButtonIcon: {
+    marginRight: 12,
+    color: Colors.primary,
   },
   scanMenuButtonText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '500',
-    marginLeft: 8,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  scanMenuDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 8,
   },
   scanOptionsMenu: {
     width: '100%',
@@ -738,5 +770,14 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  imagePreviewContainer: {
+    marginBottom: 20,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
   },
 });

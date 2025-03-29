@@ -56,17 +56,40 @@ export const usePantryStore = create<PantryState>()(
         error: null,
         
         addItem: (item) => {
-          const newItem: FoodItem = {
-            ...item,
-            id: generateId(),
-            addedAt: new Date().toISOString(),
-          };
-          set((state) => {
-            const newItems = [...state.items, newItem];
-            // Sync to cloud in background
-            syncPantryToCloud(USER_ID, newItems).catch(console.error);
-            return { items: newItems };
-          });
+          // Check if an item with the same name and unit already exists
+          const existingItem = get().items.find(i => 
+            i.name.toLowerCase() === item.name.toLowerCase() && 
+            i.unit === item.unit
+          );
+          
+          if (existingItem) {
+            // If the item exists, update its quantity instead of adding a new one
+            const updatedQuantity = existingItem.quantity + (item.quantity || 1);
+            console.log(`Merging ${item.name} with existing item. New quantity: ${updatedQuantity}`);
+            
+            // Use updateItem to modify the existing item
+            get().updateItem(existingItem.id, { 
+              quantity: updatedQuantity,
+              // Update expiry date to the later one if provided
+              ...(item.expiryDate && (!existingItem.expiryDate || new Date(item.expiryDate) > new Date(existingItem.expiryDate)) 
+                ? { expiryDate: item.expiryDate } 
+                : {})
+            });
+          } else {
+            // If the item doesn't exist, add it as a new item
+            const newItem: FoodItem = {
+              ...item,
+              id: generateId(),
+              addedAt: new Date().toISOString(),
+            };
+            
+            set((state) => {
+              const newItems = [...state.items, newItem];
+              // Sync to cloud in background
+              syncPantryToCloud(USER_ID, newItems).catch(console.error);
+              return { items: newItems };
+            });
+          }
         },
         
         updateItem: (id, updates) => {

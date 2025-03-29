@@ -13,7 +13,7 @@ const FIREBASE_CONFIG = {
 };
 
 // Spoonacular API for recipes
-const SPOONACULAR_API_KEY = "a4bc0ef0cd194e07b1936f695397ac29";
+const SPOONACULAR_API_KEY = "f4bac3e90825417fabc5e76844a07d77";
 const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
 
 // UPC database API for barcode scanning

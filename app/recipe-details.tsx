@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useRecipeStore } from "@/store/recipeStore";
+import { usePantryStore } from "@/store/pantryStore";
 import Colors from "@/constants/colors";
 import {
   Clock,
@@ -21,6 +22,9 @@ import {
   ArrowLeft,
   Check,
   X,
+  ChefHat,
+  GripHorizontal,
+  ShoppingCart,
 } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Animatable from "react-native-animatable";
@@ -68,6 +72,7 @@ export default function RecipeDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getRecipeById } = useRecipeStore();
+  const { items: pantryItems } = usePantryStore();
   const [recipe, setRecipe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +116,34 @@ export default function RecipeDetailsScreen() {
     );
   }
 
+  // Organize ingredients into available and missing
+  const getAvailableAndMissingIngredients = () => {
+    if (!recipe.extendedIngredients) return { available: [], missing: [] };
+    
+    // Create lookup of pantry item names (lowercase for case-insensitive matching)
+    const pantryItemNames = new Set(
+      pantryItems.map(item => item.name.toLowerCase())
+    );
+    
+    const available = [];
+    const missing = [];
+    
+    for (const ingredient of recipe.extendedIngredients) {
+      // Try to match ingredient with pantry items
+      const name = ingredient.name || ingredient.originalName || '';
+      if (pantryItemNames.has(name.toLowerCase()) || 
+          pantryItems.some(item => name.toLowerCase().includes(item.name.toLowerCase()))) {
+        available.push(ingredient);
+      } else {
+        missing.push(ingredient);
+      }
+    }
+    
+    return { available, missing };
+  };
+
+  const { available, missing } = getAvailableAndMissingIngredients();
+
   const handleOpenRecipe = async () => {
     if (!recipe.sourceUrl) {
       return;
@@ -132,6 +165,14 @@ export default function RecipeDetailsScreen() {
         "$2"
       )
     : "No summary available for this recipe.";
+    
+  // Clean up instructions for display
+  const cleanInstructions = recipe.instructions
+    ? recipe.instructions.replace(
+        /<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g,
+        "$2"
+      )
+    : "No detailed instructions available for this recipe. Please view the full recipe on the source website.";
 
   // Determine if we should use LinearGradient or fallback to a regular view
   const shouldUseGradient = LinearGradient !== View;
@@ -170,10 +211,10 @@ export default function RecipeDetailsScreen() {
           <View style={styles.imageContainer}>
             {recipe.imageUrl ? (
               <Image
-                source={{ uri: recipe.imageUrl }}
+                source={recipe.imageUrl}
                 style={styles.image}
                 contentFit="cover"
-                placeholder="Loading..."
+                placeholder="blurhash"
                 transition={300}
               />
             ) : (
@@ -238,7 +279,11 @@ export default function RecipeDetailsScreen() {
                 style={styles.ingredientsContainer}
                 elevation="medium"
               >
-                <Text style={styles.sectionTitle}>Ingredients</Text>
+                <View style={styles.sectionTitleRow}>
+                  <GripHorizontal size={20} color={Colors.primary} />
+                  <Text style={styles.sectionTitle}>Ingredients</Text>
+                </View>
+                
                 <View style={styles.ingredientsInfo}>
                   <View style={styles.ingredientRow}>
                     <View style={styles.checkIconContainer}>
@@ -268,15 +313,68 @@ export default function RecipeDetailsScreen() {
                     </View>
                   )}
                 </View>
+                
+                {/* Available ingredients list */}
+                {available.length > 0 && (
+                  <View style={styles.detailedIngredients}>
+                    <Text style={styles.ingredientSubheading}>Available in your pantry:</Text>
+                    {available.map((ingredient, index) => (
+                      <View key={`available-${index}`} style={styles.detailedIngredientRow}>
+                        <View style={styles.bulletPoint}>
+                          <Check size={14} color={Colors.success} />
+                        </View>
+                        <Text style={styles.detailedIngredientText}>
+                          {ingredient.amount && !isNaN(ingredient.amount) ? 
+                            `${ingredient.amount} ${ingredient.unit || ''} ` : ''}
+                          {ingredient.name || ingredient.originalName}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                
+                {/* Missing ingredients list */}
+                {missing.length > 0 && (
+                  <View style={styles.detailedIngredients}>
+                    <Text style={styles.ingredientSubheading}>Ingredients to buy:</Text>
+                    {missing.map((ingredient, index) => (
+                      <View key={`missing-${index}`} style={styles.detailedIngredientRow}>
+                        <View style={styles.bulletPoint}>
+                          <ShoppingCart size={14} color={Colors.danger} />
+                        </View>
+                        <Text style={styles.detailedIngredientText}>
+                          {ingredient.amount && !isNaN(ingredient.amount) ? 
+                            `${ingredient.amount} ${ingredient.unit || ''} ` : ''}
+                          {ingredient.name || ingredient.originalName}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </CardContainer>
             </Animatable.View>
 
             <Animatable.View animation="fadeInUp" duration={600} delay={300}>
               <CardContainer style={styles.summaryContainer} elevation="medium">
-                <Text style={styles.sectionTitle}>About this Recipe</Text>
+                <View style={styles.sectionTitleRow}>
+                  <Text style={styles.sectionTitle}>About this Recipe</Text>
+                </View>
                 <HTMLText html={cleanSummary} />
               </CardContainer>
             </Animatable.View>
+            
+            {/* Instructions section */}
+            {recipe.instructions && (
+              <Animatable.View animation="fadeInUp" duration={600} delay={350}>
+                <CardContainer style={styles.instructionsContainer} elevation="medium">
+                  <View style={styles.sectionTitleRow}>
+                    <ChefHat size={20} color={Colors.primary} />
+                    <Text style={styles.sectionTitle}>Instructions</Text>
+                  </View>
+                  <HTMLText html={cleanInstructions} />
+                </CardContainer>
+              </Animatable.View>
+            )}
 
             <Animatable.View
               animation="fadeInUp"
@@ -312,6 +410,17 @@ const htmlStyles = StyleSheet.create({
   },
   i: {
     fontStyle: "italic",
+  },
+  li: {
+    marginBottom: 8,
+  },
+  ol: {
+    marginLeft: 0,
+    paddingLeft: 0,
+  },
+  ul: {
+    marginLeft: 0,
+    paddingLeft: 0,
   },
 });
 
@@ -423,11 +532,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textLight,
   },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: Colors.text,
-    marginBottom: 12,
   },
   ingredientsContainer: {
     padding: 16,
@@ -435,6 +549,7 @@ const styles = StyleSheet.create({
   },
   ingredientsInfo: {
     gap: 12,
+    marginBottom: 16,
   },
   ingredientRow: {
     flexDirection: "row",
@@ -458,7 +573,35 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     flex: 1,
   },
+  detailedIngredients: {
+    marginTop: 16,
+  },
+  ingredientSubheading: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  detailedIngredientRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  bulletPoint: {
+    width: 20,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  detailedIngredientText: {
+    fontSize: 15,
+    color: Colors.text,
+    flex: 1,
+  },
   summaryContainer: {
+    padding: 16,
+    marginBottom: 24,
+  },
+  instructionsContainer: {
     padding: 16,
     marginBottom: 24,
   },
