@@ -53,8 +53,27 @@ export default function ItemDetailsScreen() {
           text: "Delete", 
           style: "destructive",
           onPress: () => {
+            console.log('Attempting to delete item with ID:', item.id);
+            
+            // Get a reference to the current items
+            const beforeItems = [...items];
+            
+            // Call removeItem
             removeItem(item.id);
-            router.back();
+            
+            // Check if the item was removed from the store
+            setTimeout(() => {
+              const currentItems = usePantryStore.getState().items;
+              const itemStillExists = currentItems.some(i => i.id === item.id);
+              
+              if (itemStillExists) {
+                console.error('Failed to delete item:', item.id);
+                Alert.alert('Error', 'There was a problem deleting this item. Please try again.');
+              } else {
+                console.log('Item deleted successfully');
+                router.back();
+              }
+            }, 300);
           }
         }
       ]
@@ -84,16 +103,47 @@ export default function ItemDetailsScreen() {
         { 
           text: "Yes, all of it", 
           onPress: () => {
+            console.log('Consuming entire item with ID:', item.id);
+            
+            // Call the consume function
             consumeItem(item.id);
-            router.back();
+            
+            // Check if the item is gone after consumption
+            setTimeout(() => {
+              const itemStillExists = usePantryStore.getState().items.some(i => i.id === item.id);
+              console.log('After full consumption, item still exists:', itemStillExists);
+              
+              // Always navigate back, whether it worked or not
+              router.back();
+            }, 300);
           }
         },
         { 
           text: "Yes, partially", 
           onPress: () => {
-            // For simplicity, we'll just consume 1 unit
+            console.log('Consuming 1 unit of item with ID:', item.id, 'Current quantity:', item.quantity);
+            
+            // Store the original quantity
+            const originalQuantity = item.quantity;
+            
+            // Call the consume function
             consumeItem(item.id, 1);
-            router.back();
+            
+            // Check if the quantity was reduced
+            setTimeout(() => {
+              const updatedItem = usePantryStore.getState().items.find(i => i.id === item.id);
+              
+              if (!updatedItem) {
+                console.error('Item disappeared after partial consumption');
+              } else if (updatedItem.quantity >= originalQuantity) {
+                console.error('Quantity was not reduced after consumption');
+              } else {
+                console.log('Item quantity reduced from', originalQuantity, 'to', updatedItem.quantity);
+              }
+              
+              // Always navigate back, whether it worked or not
+              router.back();
+            }, 300);
           }
         }
       ]
@@ -133,7 +183,7 @@ export default function ItemDetailsScreen() {
       />
       
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
           <Image
             source={item.imageUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=300'}
             style={styles.image}
@@ -238,6 +288,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   notFound: {
     flex: 1,
@@ -344,6 +397,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 16,
   },
   actionButton: {
     flex: 1,

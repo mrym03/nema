@@ -8,13 +8,13 @@ import { Check, Trash2 } from 'lucide-react-native';
 interface ShoppingListItemProps {
   item: ShoppingListItemType;
   onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
+  onRemove: (id: string) => void;
 }
 
 const ShoppingListItem: React.FC<ShoppingListItemProps> = ({ 
   item, 
   onToggle, 
-  onDelete 
+  onRemove 
 }) => {
   const category = CATEGORIES[item.category];
 
@@ -63,7 +63,7 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
           styles.deleteButton,
           pressed && styles.pressed
         ]}
-        onPress={() => onDelete(item.id)}
+        onPress={() => onRemove(item.id)}
       >
         <Trash2 size={20} color={Colors.danger} />
       </Pressable>

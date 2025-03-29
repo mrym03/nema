@@ -306,186 +306,192 @@ export default function AddItemScreen() {
           </View>
         )}
         
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {isFromMultiScan && (
-            <View style={styles.editInstructionsContainer}>
-              <Text style={styles.editInstructionsText}>
-                Review and edit this item's details if needed, then press Save to continue
-              </Text>
-            </View>
-          )}
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Apples, Milk, Chicken"
-              value={name}
-              onChangeText={setName}
-            />
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Category</Text>
-            <CategoryPicker
-              selectedCategory={category}
-              onSelectCategory={setCategory}
-            />
-          </View>
-          
-          <View style={styles.row}>
-            <View style={[styles.formGroup, { flex: 1 }]}>
-              <Text style={styles.label}>Quantity</Text>
+        <KeyboardAvoidingView 
+          style={{ flex: 1 }} 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={100}
+        >
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            {isFromMultiScan && (
+              <View style={styles.editInstructionsContainer}>
+                <Text style={styles.editInstructionsText}>
+                  Review and edit this item's details if needed, then press Save to continue
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Name</Text>
               <TextInput
                 style={styles.input}
-                placeholder="1"
-                value={quantity}
-                onChangeText={setQuantity}
-                keyboardType="numeric"
+                placeholder="e.g., Apples, Milk, Chicken"
+                value={name}
+                onChangeText={setName}
               />
             </View>
             
-            <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
-              <Text style={styles.label}>Unit</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., kg, liter, piece"
-                value={unit}
-                onChangeText={setUnit}
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Category</Text>
+              <CategoryPicker
+                selectedCategory={category}
+                onSelectCategory={setCategory}
               />
             </View>
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Expiry Date</Text>
-            <View style={styles.dateInputContainer}>
-              <TextInput
-                style={styles.dateInput}
-                placeholder="YYYY-MM-DD"
-                value={expiryDate}
-                onChangeText={setExpiryDate}
-              />
-              <Calendar size={20} color={Colors.textLight} />
-            </View>
-          </View>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Notes (Optional)</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Add any additional notes here..."
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-          
-          <View style={styles.buttonContainer}>
-            <Pressable 
-              style={({ pressed }) => [
-                styles.button,
-                styles.cancelButton,
-                pressed && styles.pressed
-              ]}
-              onPress={() => {
-                if (isFromMultiScan) {
-                  Alert.alert(
-                    'Cancel Multi-Item Add',
-                    'Do you want to stop adding these items?',
-                    [
-                      {
-                        text: 'Continue Editing',
-                        style: 'cancel'
-                      },
-                      {
-                        text: 'Exit',
-                        style: 'destructive',
-                        onPress: () => router.push('/')
-                      }
-                    ]
-                  );
-                } else {
-                  router.back();
-                }
-              }}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </Pressable>
             
-            <Pressable 
-              style={({ pressed }) => [
-                styles.button,
-                styles.saveButtonLarge,
-                pressed && styles.pressed
-              ]}
-              onPress={handleSave}
-            >
-              <Text style={styles.saveButtonLargeText}>
-                {isFromMultiScan ? `Save & ${multiScanCurrentIndex + 1 < multiScanTotalItems ? 'Next' : 'Finish'}` : 'Save Item'}
-              </Text>
-            </Pressable>
-          </View>
-          
-          {/* Only show scan menu in non-multi-scan mode */}
-          {!isFromMultiScan && (
-            <View style={styles.scanOptionsContainer}>
-              {isScanMenuVisible ? (
-                <View style={styles.scanOptionsMenu}>
-                  <TouchableOpacity 
-                    style={styles.scanOption}
-                    onPress={handleBarcodeScan}
-                  >
-                    <Barcode size={24} color={Colors.icon} />
-                    <Text style={styles.scanOptionText}>Scan Barcode</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.scanOption}
-                    onPress={() => {
-                      setScanMenuVisible(false);
-                      setOCRModalVisible(true);
-                    }}
-                  >
-                    <Calendar size={24} color={Colors.icon} />
-                    <Text style={styles.scanOptionText}>Scan Expiry Date (OCR)</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.scanOption}
-                    onPress={() => {
-                      setScanMenuVisible(false);
-                      setProductScannerVisible(true);
-                    }}
-                  >
-                    <ShoppingBag size={24} color={Colors.icon} />
-                    <Text style={styles.scanOptionText}>Identify Product</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.scanOption}
-                    onPress={() => {
-                      setScanMenuVisible(false);
-                      setMultiItemScannerVisible(true);
-                    }}
-                  >
-                    <Layers size={24} color={Colors.icon} />
-                    <Text style={styles.scanOptionText}>Scan Multiple Items</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.scanMenuButton}
-                  onPress={() => setScanMenuVisible(true)}
-                >
-                  <ChevronsUp size={24} color={Colors.textLight} />
-                  <Text style={styles.scanMenuButtonText}>Scan</Text>
-                </TouchableOpacity>
-              )}
+            <View style={styles.row}>
+              <View style={[styles.formGroup, { flex: 1 }]}>
+                <Text style={styles.label}>Quantity</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1"
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  keyboardType="numeric"
+                />
+              </View>
+              
+              <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
+                <Text style={styles.label}>Unit</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., kg, liter, piece"
+                  value={unit}
+                  onChangeText={setUnit}
+                />
+              </View>
             </View>
-          )}
-        </ScrollView>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Expiry Date</Text>
+              <View style={styles.dateInputContainer}>
+                <TextInput
+                  style={styles.dateInput}
+                  placeholder="YYYY-MM-DD"
+                  value={expiryDate}
+                  onChangeText={setExpiryDate}
+                />
+                <Calendar size={20} color={Colors.textLight} />
+              </View>
+            </View>
+            
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Notes (Optional)</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Add any additional notes here..."
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+            
+            <View style={styles.buttonContainer}>
+              <Pressable 
+                style={({ pressed }) => [
+                  styles.button,
+                  styles.cancelButton,
+                  pressed && styles.pressed
+                ]}
+                onPress={() => {
+                  if (isFromMultiScan) {
+                    Alert.alert(
+                      'Cancel Multi-Item Add',
+                      'Do you want to stop adding these items?',
+                      [
+                        {
+                          text: 'Continue Editing',
+                          style: 'cancel'
+                        },
+                        {
+                          text: 'Exit',
+                          style: 'destructive',
+                          onPress: () => router.push('/')
+                        }
+                      ]
+                    );
+                  } else {
+                    router.back();
+                  }
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </Pressable>
+              
+              <Pressable 
+                style={({ pressed }) => [
+                  styles.button,
+                  styles.saveButtonLarge,
+                  pressed && styles.pressed
+                ]}
+                onPress={handleSave}
+              >
+                <Text style={styles.saveButtonLargeText}>
+                  {isFromMultiScan ? `Save & ${multiScanCurrentIndex + 1 < multiScanTotalItems ? 'Next' : 'Finish'}` : 'Save Item'}
+                </Text>
+              </Pressable>
+            </View>
+            
+            {/* Only show scan menu in non-multi-scan mode */}
+            {!isFromMultiScan && (
+              <View style={styles.scanOptionsContainer}>
+                {isScanMenuVisible ? (
+                  <View style={styles.scanOptionsMenu}>
+                    <TouchableOpacity 
+                      style={styles.scanOption}
+                      onPress={handleBarcodeScan}
+                    >
+                      <Barcode size={24} color={Colors.icon} />
+                      <Text style={styles.scanOptionText}>Scan Barcode</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.scanOption}
+                      onPress={() => {
+                        setScanMenuVisible(false);
+                        setOCRModalVisible(true);
+                      }}
+                    >
+                      <Calendar size={24} color={Colors.icon} />
+                      <Text style={styles.scanOptionText}>Scan Expiry Date (OCR)</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.scanOption}
+                      onPress={() => {
+                        setScanMenuVisible(false);
+                        setProductScannerVisible(true);
+                      }}
+                    >
+                      <ShoppingBag size={24} color={Colors.icon} />
+                      <Text style={styles.scanOptionText}>Identify Product</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.scanOption}
+                      onPress={() => {
+                        setScanMenuVisible(false);
+                        setMultiItemScannerVisible(true);
+                      }}
+                    >
+                      <Layers size={24} color={Colors.icon} />
+                      <Text style={styles.scanOptionText}>Scan Multiple Items</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.scanMenuButton}
+                    onPress={() => setScanMenuVisible(true)}
+                  >
+                    <ChevronsUp size={24} color={Colors.textLight} />
+                    <Text style={styles.scanMenuButtonText}>Scan</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
         
         {/* OCR Scanner Modal */}
         <Modal
@@ -513,8 +519,6 @@ export default function AddItemScreen() {
         >
           <MultiItemScanner onClose={() => setMultiItemScannerVisible(false)} />
         </Modal>
-        
-        {/* Removed Barcode Scanner Modal */}
       </SafeAreaView>
     </>
   );
@@ -527,6 +531,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 100, // Add extra padding at the bottom
   },
   formGroup: {
     marginBottom: 20,

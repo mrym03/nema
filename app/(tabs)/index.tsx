@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { usePantryStore } from '@/store/pantryStore';
-import { FoodItem } from '@/types';
+import { FoodItem, FoodCategory } from '@/types';
 import Colors from '@/constants/colors';
 import { getExpiringItems, sortByExpiryDate } from '@/utils/helpers';
 import FoodItemCard from '@/components/FoodItemCard';
@@ -16,8 +16,15 @@ import { Filter, Plus, Trash2 } from 'lucide-react-native';
 export default function PantryScreen() {
   const router = useRouter();
   const { items, clearAllItems } = usePantryStore();
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  
+  console.log('PantryScreen: Store initialized with', items.length, 'items');
+  console.log('PantryScreen: First few items:', items.slice(0, 3));
+  
+  const [selectedCategory, setSelectedCategory] = useState<FoodCategory | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
+  
+  // Debug log for the selected category
+  console.log('PantryScreen: selectedCategory =', selectedCategory);
   
   const expiringItems = getExpiringItems(items);
   
@@ -112,12 +119,19 @@ export default function PantryScreen() {
       )}
       
       {showFilters && (
-        <CategoryPicker
-          selectedCategory={selectedCategory as any || 'other'}
-          onSelectCategory={(category) => 
-            setSelectedCategory(category === selectedCategory ? null : category)
-          }
-        />
+        <View style={styles.filterContainer}>
+          <Text style={styles.filterHeader}>Filter by Category</Text>
+          <CategoryPicker
+            selectedCategory={selectedCategory as FoodCategory}
+            onSelectCategory={(category) => {
+              console.log('Category selected:', category);
+              // Toggle selected category
+              const newCategory = category === selectedCategory ? null : category;
+              console.log('Setting new category to:', newCategory);
+              setSelectedCategory(newCategory);
+            }}
+          />
+        </View>
       )}
       
       <FlatList
@@ -174,11 +188,26 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 80,
+    paddingBottom: 100,
   },
   addButtonContainer: {
     position: 'absolute',
     bottom: 24,
     right: 24,
+    elevation: 5,
+    zIndex: 5,
+  },
+  filterContainer: {
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+  },
+  filterHeader: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
   },
 });

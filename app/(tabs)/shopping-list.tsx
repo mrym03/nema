@@ -1,47 +1,77 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, TextInput } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useShoppingListStore } from '@/store/shoppingListStore';
 import { ShoppingListItem as ShoppingListItemType, FoodCategory } from '@/types';
 import Colors from '@/constants/colors';
 import ShoppingListItem from '@/components/ShoppingListItem';
 import EmptyState from '@/components/EmptyState';
-import AddItemButton from '@/components/AddItemButton';
-import { Trash2, Plus } from 'lucide-react-native';
-import { generateId } from '@/utils/helpers';
+import { Plus, Trash2 } from 'lucide-react-native';
 
 export default function ShoppingListScreen() {
-  const { items, addItem, removeItem, toggleItemCompleted, clearCompletedItems } = useShoppingListStore();
-  const [newItemName, setNewItemName] = useState('');
-  
-  const completedItems = items.filter(item => item.completed);
-  const incompleteItems = items.filter(item => !item.completed);
+  const { items, addItem, updateItem, removeItem, clearCompletedItems } = useShoppingListStore();
   
   const handleAddItem = () => {
-    if (newItemName.trim()) {
-      addItem({
-        name: newItemName.trim(),
-        category: 'other',
-        quantity: 1,
-        unit: 'item',
-      });
-      setNewItemName('');
+    Alert.prompt(
+      "Add Item",
+      "Enter item name",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Add",
+          onPress: name => {
+            if (name && name.trim()) {
+              addItem({
+                name: name.trim(),
+                category: 'other',
+                quantity: 1,
+                unit: 'item'
+              });
+            }
+          }
+        }
+      ]
+    );
+  };
+  
+  const handleClearCompleted = () => {
+    if (items.some(item => item.completed)) {
+      Alert.alert(
+        "Clear Completed Items",
+        "Are you sure you want to remove all completed items?",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Clear",
+            style: "destructive",
+            onPress: () => clearCompletedItems()
+          }
+        ]
+      );
+    } else {
+      Alert.alert("No Completed Items", "There are no completed items to clear.");
     }
   };
   
-  const renderItem = ({ item }: { item: ShoppingListItemType }) => (
+  const renderItem = useCallback(({ item }) => (
     <ShoppingListItem
       item={item}
-      onToggle={toggleItemCompleted}
-      onDelete={removeItem}
+      onToggle={() => updateItem(item.id, { completed: !item.completed })}
+      onRemove={() => removeItem(item.id)}
     />
-  );
+  ), [updateItem, removeItem]);
   
   const renderEmptyState = () => (
     <EmptyState
       title="Your shopping list is empty"
       message="Add items to your shopping list to keep track of what you need to buy."
-      imageUrl="https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=300"
+      imageUrl="https://images.unsplash.com/photo-1601598851547-4302969d0614?q=80&w=300"
     />
   );
   
@@ -49,29 +79,28 @@ export default function ShoppingListScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
         <Text style={styles.title}>Shopping List</Text>
-        {completedItems.length > 0 && (
+        <View style={styles.headerButtons}>
           <Pressable 
             style={({ pressed }) => [
-              styles.clearButton,
+              styles.iconButton,
               pressed && styles.pressed
             ]}
-            onPress={clearCompletedItems}
+            onPress={handleClearCompleted}
           >
-            <Trash2 size={16} color={Colors.textLight} />
-            <Text style={styles.clearButtonText}>Clear completed</Text>
+            <Trash2 size={20} color={Colors.danger} />
           </Pressable>
-        )}
+        </View>
       </View>
       
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder="Add an item..."
-          value={newItemName}
-          onChangeText={setNewItemName}
-          onSubmitEditing={handleAddItem}
-          returnKeyType="done"
-        />
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={renderEmptyState}
+      />
+      
+      <View style={styles.addButtonContainer}>
         <Pressable 
           style={({ pressed }) => [
             styles.addButton,
@@ -79,17 +108,9 @@ export default function ShoppingListScreen() {
           ]}
           onPress={handleAddItem}
         >
-          <Plus size={20} color="#fff" />
+          <Plus size={24} color="#fff" />
         </Pressable>
       </View>
-      
-      <FlatList
-        data={[...incompleteItems, ...completedItems]}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={renderEmptyState}
-      />
     </SafeAreaView>
   );
 }
@@ -111,46 +132,39 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: Colors.text,
   },
-  clearButton: {
+  headerButtons: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 8,
+  },
+  iconButton: {
     padding: 8,
     borderRadius: 8,
     backgroundColor: Colors.card,
-    gap: 4,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    color: Colors.textLight,
   },
   pressed: {
     opacity: 0.7,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 8,
-    gap: 8,
+  listContent: {
+    padding: 16,
+    paddingBottom: 100, // Increase to ensure content doesn't get hidden behind tab bar
   },
-  input: {
-    flex: 1,
-    height: 48,
-    backgroundColor: Colors.card,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    fontSize: 16,
+  addButtonContainer: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    elevation: 5, // Add elevation for Android
+    zIndex: 5, // Add zIndex for iOS
   },
   addButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
   },
 });

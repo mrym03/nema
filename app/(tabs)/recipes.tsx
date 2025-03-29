@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,42 +14,29 @@ export default function RecipesScreen() {
   const { recipes, isLoading, fetchRecipes } = useRecipeStore();
   const { items } = usePantryStore();
   
-  useEffect(() => {
-    // In a real app, we would extract ingredient names and pass them to fetchRecipes
-    const ingredientNames = items.map(item => item.name);
-    fetchRecipes(ingredientNames);
-  }, [items]);
-  
-  const handleRecipePress = (recipe: Recipe) => {
+  const handleRecipePress = (recipeId) => {
     router.push({
-      pathname: '/recipe-details',
-      params: { id: recipe.id }
+      pathname: '../recipe-details',
+      params: { id: recipeId }
     });
   };
   
-  const renderItem = ({ item }: { item: Recipe }) => (
-    <RecipeCard recipe={item} onPress={handleRecipePress} />
-  );
+  const renderItem = useCallback(({ item }) => (
+    <RecipeCard recipe={item} onPress={() => handleRecipePress(item.id)} />
+  ), []);
   
   const renderEmptyState = () => (
     <EmptyState
       title="No recipes found"
-      message={
-        items.length === 0
-          ? "Add items to your pantry to get recipe suggestions."
-          : "We couldn't find any recipes with your current ingredients. Try adding more items to your pantry."
-      }
-      imageUrl="https://images.unsplash.com/photo-1556911220-e15b29be8c8f?q=80&w=300"
+      message="Recipes based on your pantry items will appear here."
+      imageUrl="https://images.unsplash.com/photo-1547592180-85f173990554?q=80&w=300"
     />
   );
   
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Recipe Suggestions</Text>
-        <Text style={styles.subtitle}>
-          Based on {items.length} items in your pantry
-        </Text>
+        <Text style={styles.title}>Recommended Recipes</Text>
       </View>
       
       <FlatList
@@ -71,18 +58,16 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: Colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: Colors.textLight,
   },
   listContent: {
     padding: 16,
+    paddingBottom: 100, // Increase to ensure content doesn't get hidden behind tab bar
   },
 });

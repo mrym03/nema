@@ -1,12 +1,45 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { FoodCategory } from '@/types';
 import { CATEGORIES } from '@/constants/categories';
 import Colors from '@/constants/colors';
 import * as Icons from 'lucide-react-native';
+import { 
+  Apple, 
+  Leaf, 
+  Milk, 
+  Beef, 
+  Fish, 
+  Wheat, 
+  Cookie, 
+  Package, 
+  Snowflake, 
+  Candy, 
+  Coffee, 
+  Utensils, 
+  Flame,
+} from 'lucide-react-native';
+
+// Map of category keys to icon components
+const categoryIcons: Record<string, React.ComponentType<any>> = {
+  fruits: Apple,
+  vegetables: Leaf,
+  dairy: Milk,
+  meat: Beef,
+  seafood: Fish,
+  grains: Wheat,
+  bakery: Cookie,
+  canned: Package,
+  frozen: Snowflake,
+  snacks: Candy,
+  beverages: Coffee,
+  condiments: Utensils,
+  spices: Flame,
+  other: Package,
+};
 
 interface CategoryPickerProps {
-  selectedCategory: FoodCategory;
+  selectedCategory: FoodCategory | null;
   onSelectCategory: (category: FoodCategory) => void;
 }
 
@@ -14,6 +47,8 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
   selectedCategory, 
   onSelectCategory 
 }) => {
+  console.log('CategoryPicker: rendering with selectedCategory =', selectedCategory);
+  
   return (
     <ScrollView 
       horizontal
@@ -21,18 +56,19 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
       contentContainerStyle={styles.container}
     >
       {Object.entries(CATEGORIES).map(([key, category]) => {
-        const isSelected = key === selectedCategory;
-        const IconComponent = Icons[category.icon as keyof typeof Icons] || Icons.Package;
+        const isSelected = selectedCategory ? key === selectedCategory : false;
+        // Get the appropriate icon component for this category
+        const IconComponent = categoryIcons[key] || Package;
         
         return (
-          <Pressable
+          <TouchableOpacity
             key={key}
-            style={({ pressed }) => [
-              styles.categoryItem,
-              isSelected && styles.selectedItem,
-              pressed && styles.pressed
-            ]}
-            onPress={() => onSelectCategory(key as FoodCategory)}
+            style={styles.categoryItem}
+            activeOpacity={0.7}
+            onPress={() => {
+              console.log('TouchableOpacity pressed for category:', key);
+              onSelectCategory(key as FoodCategory);
+            }}
           >
             <View 
               style={[
@@ -45,15 +81,19 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
                 color={isSelected ? '#fff' : Colors.textLight} 
               />
             </View>
-            <Text 
-              style={[
+            
+            <View style={[
+              styles.textContainer,
+              isSelected && { backgroundColor: category.color + '30' }
+            ]}>
+              <Text style={[
                 styles.categoryName,
-                isSelected && styles.selectedText
-              ]}
-            >
-              {category.label}
-            </Text>
-          </Pressable>
+                isSelected && { color: category.color, fontWeight: '700' }
+              ]}>
+                {category.label}
+              </Text>
+            </View>
+          </TouchableOpacity>
         );
       })}
     </ScrollView>
@@ -64,17 +104,12 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 12,
+    gap: 14,
   },
   categoryItem: {
     alignItems: 'center',
+    marginHorizontal: 6,
     width: 80,
-  },
-  selectedItem: {
-    transform: [{ scale: 1.05 }],
-  },
-  pressed: {
-    opacity: 0.8,
   },
   iconContainer: {
     width: 44,
@@ -82,17 +117,27 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+  },
+  textContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    minWidth: 70,
+    alignItems: 'center',
   },
   categoryName: {
     fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
-  },
-  selectedText: {
+    fontWeight: '500',
     color: Colors.text,
-    fontWeight: '600',
-  },
+    textAlign: 'center',
+  }
 });
 
 export default CategoryPicker;

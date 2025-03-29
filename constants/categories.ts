@@ -3,12 +3,12 @@ import { FoodCategory } from '@/types';
 export const CATEGORIES: { [key in FoodCategory]: { label: string; icon: string; color: string } } = {
   fruits: { 
     label: 'Fruits', 
-    icon: 'apple', 
+    icon: 'Package', 
     color: '#FF5252' 
   },
   vegetables: { 
     label: 'Vegetables', 
-    icon: 'salad', 
+    icon: 'Package', 
     color: '#4CAF50' 
   },
   dairy: { 
@@ -38,7 +38,7 @@ export const CATEGORIES: { [key in FoodCategory]: { label: string; icon: string;
   },
   canned: { 
     label: 'Canned', 
-    icon: 'package', 
+    icon: 'Package', 
     color: '#9E9E9E' 
   },
   frozen: { 
@@ -68,7 +68,7 @@ export const CATEGORIES: { [key in FoodCategory]: { label: string; icon: string;
   },
   other: { 
     label: 'Other', 
-    icon: 'package', 
+    icon: 'Package', 
     color: '#BDBDBD' 
   }
 };
