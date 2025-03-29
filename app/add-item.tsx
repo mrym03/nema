@@ -15,6 +15,7 @@ import ProductScanner from '@/components/ProductScanner';
 import MultiItemScanner from '@/components/MultiItemScanner';
 import Constants from 'expo-constants';
 import { Image } from 'expo-image';
+import { getDefaultShelfLife, getDefaultOpenedShelfLife, calculateExpiryDate } from '@/utils/date';
 
 export default function AddItemScreen() {
   const router = useRouter();
@@ -44,6 +45,15 @@ export default function AddItemScreen() {
   );
   const [notes, setNotes] = useState(params.notes ? params.notes.toString() : '');
   const [imageUrl, setImageUrl] = useState(params.imageUrl ? params.imageUrl.toString() : '');
+  // For fruits, automatically set isOpen to true, otherwise default to false
+  const [isOpen, setIsOpen] = useState(category === 'fruits' ? true : false);
+  
+  // Update isOpen whenever category changes
+  useEffect(() => {
+    if (category === 'fruits') {
+      setIsOpen(true);
+    }
+  }, [category]);
   
   // Other state variables
   const [isBarcodeModalVisible, setBarcodeModalVisible] = useState(false);
@@ -172,6 +182,9 @@ export default function AddItemScreen() {
       expiryDate: new Date(`${expiryDate}T00:00:00`).toISOString(),
       notes: notes.trim(),
       imageUrl: imageUrl.trim() || undefined,
+      isOpen: isOpen,
+      unopenedShelfLife: getDefaultShelfLife(category),
+      openedShelfLife: getDefaultOpenedShelfLife(category),
     });
     
     // If this is part of a multi-scan workflow
@@ -219,7 +232,7 @@ export default function AddItemScreen() {
       }
     } else {
       // Regular single item workflow
-      router.back();
+    router.back();
     }
   };
 
@@ -327,7 +340,7 @@ export default function AddItemScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={100}
         >
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
             {isFromMultiScan && (
               <View style={styles.editInstructionsContainer}>
                 <Text style={styles.editInstructionsText}>
@@ -348,80 +361,114 @@ export default function AddItemScreen() {
               </View>
             ) : null}
             
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Name</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., Apples, Milk, Chicken"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Category</Text>
+            <CategoryPicker
+              selectedCategory={category}
+              onSelectCategory={setCategory}
+            />
+          </View>
+          
+          {category === 'fruits' ? (
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Product Status</Text>
+              <View style={styles.fruitStatusContainer}>
+                <Text style={styles.fruitStatusText}>
+                  Fruits are automatically marked as "open" since they naturally expire once purchased.
+                </Text>
+              </View>
+              <Text style={styles.helperText}>
+                Fresh fruits typically last about {getDefaultOpenedShelfLife('fruits')} days.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Is the product open?</Text>
+              <View style={styles.switchContainer}>
+                <Text style={styles.switchLabel}>
+                  {isOpen ? 'Yes, already opened' : 'No, unopened'}
+                </Text>
+                <TouchableOpacity 
+                  style={[styles.switch, isOpen ? styles.switchOn : styles.switchOff]}
+                  onPress={() => setIsOpen(!isOpen)}
+                >
+                  <View style={[styles.switchThumb, isOpen ? styles.switchThumbOn : styles.switchThumbOff]} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helperText}>
+                {isOpen 
+                  ? `Opened items typically expire in ${getDefaultOpenedShelfLife(category)} days when opened.` 
+                  : `Unopened items typically last about ${getDefaultShelfLife(category)} days.`}
+              </Text>
+            </View>
+          )}
+          
+          <View style={styles.row}>
+            <View style={[styles.formGroup, { flex: 1 }]}>
+              <Text style={styles.label}>Quantity</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g., Apples, Milk, Chicken"
-                value={name}
-                onChangeText={setName}
+                placeholder="1"
+                value={quantity}
+                onChangeText={setQuantity}
+                keyboardType="numeric"
               />
             </View>
             
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Category</Text>
-              <CategoryPicker
-                selectedCategory={category}
-                onSelectCategory={setCategory}
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
+              <Text style={styles.label}>Unit</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., kg, liter, piece"
+                value={unit}
+                onChangeText={setUnit}
               />
             </View>
-            
-            <View style={styles.row}>
-              <View style={[styles.formGroup, { flex: 1 }]}>
-                <Text style={styles.label}>Quantity</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="1"
-                  value={quantity}
-                  onChangeText={setQuantity}
-                  keyboardType="numeric"
-                />
-              </View>
-              
-              <View style={[styles.formGroup, { flex: 1, marginLeft: 12 }]}>
-                <Text style={styles.label}>Unit</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., kg, liter, piece"
-                  value={unit}
-                  onChangeText={setUnit}
-                />
-              </View>
-            </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Expiry Date</Text>
-              <View style={styles.dateInputContainer}>
-                <TextInput
-                  style={styles.dateInput}
-                  placeholder="YYYY-MM-DD"
-                  value={expiryDate}
-                  onChangeText={setExpiryDate}
-                />
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Expiry Date</Text>
+            <View style={styles.dateInputContainer}>
+              <TextInput
+                style={styles.dateInput}
+                placeholder="YYYY-MM-DD"
+                value={expiryDate}
+                onChangeText={setExpiryDate}
+              />
                 <Calendar size={24} color={Colors.text} />
               </View>
-            </View>
-            
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Notes (Optional)</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Add any additional notes here..."
-                value={notes}
-                onChangeText={setNotes}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
-            </View>
-            
-            <View style={styles.buttonContainer}>
-              <Pressable 
-                style={({ pressed }) => [
-                  styles.button,
-                  styles.cancelButton,
-                  pressed && styles.pressed
-                ]}
+          </View>
+          
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Notes (Optional)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="Add any additional notes here..."
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
+          
+          <View style={styles.buttonContainer}>
+            <Pressable 
+              style={({ pressed }) => [
+                styles.button,
+                styles.cancelButton,
+                pressed && styles.pressed
+              ]}
                 onPress={() => {
                   if (isFromMultiScan) {
                     Alert.alert(
@@ -443,23 +490,23 @@ export default function AddItemScreen() {
                     router.back();
                   }
                 }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </Pressable>
-              
-              <Pressable 
-                style={({ pressed }) => [
-                  styles.button,
-                  styles.saveButtonLarge,
-                  pressed && styles.pressed
-                ]}
-                onPress={handleSave}
-              >
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={({ pressed }) => [
+                styles.button,
+                styles.saveButtonLarge,
+                pressed && styles.pressed
+              ]}
+              onPress={handleSave}
+            >
                 <Text style={styles.saveButtonLargeText}>
                   {isFromMultiScan ? `Save & ${multiScanCurrentIndex + 1 < multiScanTotalItems ? 'Next' : 'Finish'}` : 'Save Item'}
                 </Text>
-              </Pressable>
-            </View>
+            </Pressable>
+          </View>
             
             {/* Only show scan menu in non-multi-scan mode */}
             {!isFromMultiScan && (
@@ -518,7 +565,7 @@ export default function AddItemScreen() {
                 )}
               </View>
             )}
-          </ScrollView>
+        </ScrollView>
         </KeyboardAvoidingView>
         
         {/* OCR Scanner Modal */}
@@ -779,5 +826,83 @@ const styles = StyleSheet.create({
   imagePreview: {
     width: '100%',
     height: 200,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+  },
+  categoryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginRight: 8,
+  },
+  switchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 12,
+  },
+  switchLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginRight: 12,
+  },
+  switch: {
+    padding: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+  },
+  switchOn: {
+    backgroundColor: Colors.primary,
+  },
+  switchOff: {
+    backgroundColor: Colors.card,
+  },
+  switchThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 8,
+    backgroundColor: Colors.text,
+  },
+  switchThumbOn: {
+    backgroundColor: '#fff',
+  },
+  switchThumbOff: {
+    backgroundColor: Colors.textLight,
+  },
+  helperText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginTop: 4,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  fruitStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+  },
+  fruitStatusText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
   },
 });

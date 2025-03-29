@@ -174,6 +174,13 @@ const FoodItemCard: React.FC<FoodItemCardProps> = ({ foodItem, onPress }) => {
               {category.charAt(0).toUpperCase() + category.slice(1)}
             </Text>
           </GradientComponent>
+          
+          {/* Status tag - if opened */}
+          {foodItem.isOpen && (
+            <View style={styles.statusTag}>
+              <Text style={styles.statusText}>Opened</Text>
+            </View>
+          )}
         </View>
         
         <View style={styles.content}>
@@ -311,6 +318,19 @@ const styles = StyleSheet.create({
   expiringDate: {
     color: Colors.warning,
     fontWeight: '500',
+  },
+  statusTag: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: Colors.success,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: Colors.textDark,
   },
 });
 

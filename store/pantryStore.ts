@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { FoodItem } from '@/types';
+import { FoodItem, FoodCategory } from '@/types';
 import { mockFoodItems } from '@/mocks/foodItems';
 import { generateId } from '@/utils/helpers';
 import { syncPantryToCloud, fetchPantryFromCloud, lookupBarcodeUPC } from '@/utils/api';
@@ -43,6 +43,7 @@ interface PantryState {
   clearAllItems: () => void;
   syncWithCloud: () => Promise<void>;
   addItemByBarcode: (barcode: string) => Promise<FoodItem | null>;
+  toggleItemOpenStatus: (id: string) => void;
 }
 
 export const usePantryStore = create<PantryState>()(
@@ -77,10 +78,13 @@ export const usePantryStore = create<PantryState>()(
             });
           } else {
             // If the item doesn't exist, add it as a new item
+            // For fruits, always set isOpen to true
             const newItem: FoodItem = {
               ...item,
               id: generateId(),
               addedAt: new Date().toISOString(),
+              // Ensure fruits are always marked as open
+              isOpen: item.category === 'fruits' ? true : item.isOpen
             };
             
             set((state) => {
@@ -220,17 +224,22 @@ export const usePantryStore = create<PantryState>()(
               return null;
             }
             
+            const category: FoodCategory = 'other'; // Default category
+            
             // Create a new item from the product data
             const newItem: FoodItem = {
               id: generateId(),
               name: productData.name,
-              category: 'other', // Default category, can be updated later
+              category: category, // Default category, can be updated later
               expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // Default 30 days
               quantity: 1,
               unit: 'item',
               addedAt: new Date().toISOString(),
               notes: productData.description || '',
-              imageUrl: productData.image || undefined
+              imageUrl: productData.image || undefined,
+              isOpen: false, // Default to closed
+              unopenedShelfLife: 30, // Default 30 days
+              openedShelfLife: 7 // Default 7 days when opened
             };
             
             // Add the item to the store
@@ -250,6 +259,32 @@ export const usePantryStore = create<PantryState>()(
             });
             return null;
           }
+        },
+        
+        toggleItemOpenStatus: (id) => {
+          const item = get().items.find(i => i.id === id);
+          if (!item) return;
+          
+          const wasOpen = item.isOpen;
+          const newIsOpen = !wasOpen;
+          
+          // Calculate a new expiry date if the item is being opened
+          let newExpiryDate = item.expiryDate;
+          if (!wasOpen && newIsOpen && item.openedShelfLife) {
+            // If item is being opened, and we have openedShelfLife data, update expiry date
+            const today = new Date();
+            newExpiryDate = new Date(today.getTime() + (item.openedShelfLife * 24 * 60 * 60 * 1000)).toISOString();
+            console.log(`Item opened - updating expiry date to ${item.openedShelfLife} days from now:`, newExpiryDate);
+          }
+          
+          set((state) => {
+            const newItems = state.items.map((i) => 
+              i.id === id ? { ...i, isOpen: newIsOpen, expiryDate: newExpiryDate } : i
+            );
+            // Sync to cloud in background
+            syncPantryToCloud(USER_ID, newItems).catch(console.error);
+            return { items: newItems };
+          });
         }
       };
     },

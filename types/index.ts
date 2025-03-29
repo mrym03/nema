@@ -8,6 +8,9 @@ export interface FoodItem {
   imageUrl?: string;
   notes?: string;
   addedAt: string; // ISO string
+  isOpen: boolean; // Whether the product has been opened
+  unopenedShelfLife?: number; // Shelf life in days when unopened
+  openedShelfLife?: number; // Shelf life in days when opened
 }
 
 export type FoodCategory = 
