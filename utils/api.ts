@@ -29,16 +29,90 @@ const DEV_MODE = true; // Temporarily using development mode until Supabase tabl
 // Recipe API functions
 export const fetchRecipesByIngredients = async (ingredients: string[]) => {
   try {
-    const ingredientsString = ingredients.join(',');
-    const response = await fetch(
-      `${SPOONACULAR_BASE_URL}/recipes/findByIngredients?ingredients=${ingredientsString}&number=5&apiKey=${SPOONACULAR_API_KEY}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+    if (ingredients.length === 0) {
+      console.log('No ingredients provided, returning empty results');
+      return [];
     }
     
-    return await response.json();
+    const ingredientsString = ingredients.join(',');
+    console.log(`Fetching recipes for ingredients: ${ingredientsString}`);
+    
+    // Step 1: Find recipes that match our ingredients
+    const findResponse = await fetch(
+      `${SPOONACULAR_BASE_URL}/recipes/findByIngredients?ingredients=${ingredientsString}&number=10&ranking=1&ignorePantry=false&apiKey=${SPOONACULAR_API_KEY}`
+    );
+    
+    if (!findResponse.ok) {
+      throw new Error(`API error: ${findResponse.status}`);
+    }
+    
+    const recipesBasicInfo = await findResponse.json() as Array<{
+      id: number;
+      title: string;
+      image: string;
+      usedIngredientCount: number;
+      missedIngredientCount: number;
+      likes: number;
+    }>;
+    
+    if (!recipesBasicInfo || recipesBasicInfo.length === 0) {
+      console.log('No recipes found for the given ingredients');
+      return [];
+    }
+    
+    console.log(`Found ${recipesBasicInfo.length} recipes for the ingredients`);
+    
+    // Step 2: Get more detailed information for each recipe
+    const recipeIds = recipesBasicInfo.map((recipe) => recipe.id).join(',');
+    const detailsResponse = await fetch(
+      `${SPOONACULAR_BASE_URL}/recipes/informationBulk?ids=${recipeIds}&apiKey=${SPOONACULAR_API_KEY}`
+    );
+    
+    if (!detailsResponse.ok) {
+      // If we can't get details, we'll just use the basic info
+      console.warn(`Couldn't fetch detailed recipe info: ${detailsResponse.status}`);
+      return recipesBasicInfo.map((item) => ({
+        id: item.id.toString(),
+        title: item.title,
+        imageUrl: item.image,
+        readyInMinutes: 30, // Default value
+        servings: 4, // Default value
+        sourceUrl: '',
+        summary: '',
+        usedIngredientCount: item.usedIngredientCount,
+        missedIngredientCount: item.missedIngredientCount,
+        likes: item.likes || 0
+      }));
+    }
+    
+    const detailedRecipes = await detailsResponse.json() as Array<{
+      id: number;
+      title: string;
+      image: string;
+      readyInMinutes: number;
+      servings: number;
+      sourceUrl: string;
+      summary: string;
+      aggregateLikes: number;
+    }>;
+    
+    // Step 3: Merge the detailed info with the ingredient matching info
+    return detailedRecipes.map((detailedRecipe) => {
+      const basicInfo = recipesBasicInfo.find((r) => r.id === detailedRecipe.id);
+      
+      return {
+        id: detailedRecipe.id.toString(),
+        title: detailedRecipe.title,
+        imageUrl: detailedRecipe.image,
+        readyInMinutes: detailedRecipe.readyInMinutes,
+        servings: detailedRecipe.servings,
+        sourceUrl: detailedRecipe.sourceUrl || '',
+        summary: detailedRecipe.summary || '',
+        usedIngredientCount: basicInfo ? basicInfo.usedIngredientCount : 0,
+        missedIngredientCount: basicInfo ? basicInfo.missedIngredientCount : 0,
+        likes: detailedRecipe.aggregateLikes || 0
+      };
+    });
   } catch (error) {
     console.error('Error fetching recipes:', error);
     throw error;
