@@ -7,6 +7,7 @@ import {
   ScrollView,
   Linking,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
@@ -25,11 +26,14 @@ import {
   ChefHat,
   GripHorizontal,
   ShoppingCart,
+  CookingPot,
 } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Animatable from "react-native-animatable";
 import CardContainer from "@/components/CardContainer";
 import PrimaryButton from "@/components/PrimaryButton";
+import { markIngredientsAsOpened, calculateSustainabilityImpact } from "@/utils/recipeFunctions";
+import { FoodItem } from "@/types";
 
 // Try to import HTMLView, with a fallback to our simple HTML stripper if not available
 let HTMLView: any = null;
@@ -76,6 +80,14 @@ export default function RecipeDetailsScreen() {
   const [recipe, setRecipe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCooking, setIsCooking] = useState(false);
+  const [cookingComplete, setCookingComplete] = useState(false);
+  const [sustainability, setSustainability] = useState<{
+    wasteReduction: number;
+    co2Reduction: number;
+    waterSavings: number;
+    percentOfAnnualWaste: number;
+  } | null>(null);
 
   useEffect(() => {
     const loadRecipeDetails = async () => {
@@ -156,6 +168,72 @@ export default function RecipeDetailsScreen() {
       // Fallback to basic linking
       Linking.openURL(recipe.sourceUrl);
     }
+  };
+
+  const handleCookRecipe = () => {
+    if (available.length === 0) {
+      Alert.alert(
+        "No Ingredients Available",
+        "You don't have any of the required ingredients in your pantry."
+      );
+      return;
+    }
+
+    setIsCooking(true);
+
+    // Find the pantry items that match the available ingredients
+    const ingredientIds: string[] = [];
+    const usedItems: FoodItem[] = [];
+    const usedItemNames: string[] = [];
+    const usedQuantities: {[id: string]: number} = {};
+
+    pantryItems.forEach(item => {
+      // Check if this pantry item is used in any of the available ingredients
+      const matchingIngredient = available.find(ingredient => {
+        const ingredientName = (ingredient.name || ingredient.originalName || '').toLowerCase();
+        return ingredientName.includes(item.name.toLowerCase()) || 
+               item.name.toLowerCase().includes(ingredientName);
+      });
+
+      if (matchingIngredient) {
+        ingredientIds.push(item.id);
+        usedItems.push(item);
+        
+        // Get the amount used from the recipe
+        const amountInRecipe = matchingIngredient.amount && !isNaN(matchingIngredient.amount) 
+          ? matchingIngredient.amount 
+          : 1;
+          
+        // Save the amount used for display  
+        usedQuantities[item.id] = Math.min(amountInRecipe, item.quantity);
+        
+        // Format name with quantity for display
+        const formattedName = `${item.name} (${usedQuantities[item.id]} ${item.unit || 'item'}${usedQuantities[item.id] > 1 && !['kg', 'g', 'ml', 'l'].includes(item.unit || '') ? 's' : ''})`;
+        usedItemNames.push(formattedName);
+      }
+    });
+
+    // Mark the ingredients as opened and update quantities
+    const updatedItems = markIngredientsAsOpened(ingredientIds, available);
+
+    // Calculate sustainability impact
+    const impact = calculateSustainabilityImpact(usedItems);
+    setSustainability(impact);
+
+    // Create a nicely formatted list of used ingredients
+    const ingredientsList = usedItemNames.join('\n• ');
+
+    // Show success message without detailed metrics
+    setTimeout(() => {
+      setIsCooking(false);
+      setCookingComplete(true);
+      
+      Alert.alert(
+        "Recipe Cooked!",
+        `You used the following ingredients from your pantry:\n\n• ${ingredientsList}\n\nThese items have been marked as opened or quantities have been updated.`,
+        [{ text: "Great!" }]
+      );
+    }, 1500);
   };
 
   // Clean up HTML content for display
@@ -382,12 +460,43 @@ export default function RecipeDetailsScreen() {
               delay={400}
               style={styles.buttonContainer}
             >
-              <PrimaryButton
-                title="View Full Recipe"
-                onPress={handleOpenRecipe}
-                disabled={!recipe.sourceUrl}
-                icon={<ExternalLink size={20} color="#FFFFFF" />}
-              />
+              <View style={styles.buttonsRow}>
+                <PrimaryButton
+                  title="View Full Recipe"
+                  onPress={handleOpenRecipe}
+                  disabled={!recipe.sourceUrl}
+                  icon={<ExternalLink size={20} color="#FFFFFF" />}
+                  style={styles.buttonHalf}
+                />
+                
+                <PrimaryButton
+                  title={isCooking ? "Preparing..." : "Cook Recipe"}
+                  onPress={handleCookRecipe}
+                  disabled={isCooking || available.length === 0 || cookingComplete}
+                  icon={<CookingPot size={20} color="#FFFFFF" />}
+                  style={[
+                    styles.buttonHalf, 
+                    cookingComplete ? styles.buttonSuccess : null
+                  ]}
+                  loading={isCooking}
+                />
+              </View>
+              
+              {cookingComplete && (
+                <Animatable.View 
+                  animation="fadeIn" 
+                  duration={500} 
+                  style={styles.sustainabilityInfo}
+                >
+                  <Text style={styles.sustainabilityTitle}>
+                    Pantry Updated!
+                  </Text>
+                  <Text style={styles.sustainabilityText}>
+                    Your pantry has been updated with the ingredients used in this recipe. 
+                    Items have been marked as opened and quantities adjusted accordingly.
+                  </Text>
+                </Animatable.View>
+              )}
             </Animatable.View>
           </View>
         </ScrollView>
@@ -612,5 +721,31 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginBottom: 24,
+  },
+  buttonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  buttonHalf: {
+    width: '48%',
+  },
+  buttonSuccess: {
+    backgroundColor: Colors.success,
+  },
+  sustainabilityInfo: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: Colors.background,
+    borderRadius: 8,
+  },
+  sustainabilityTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  sustainabilityText: {
+    fontSize: 16,
+    color: Colors.text,
   },
 });

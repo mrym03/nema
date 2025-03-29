@@ -3,29 +3,76 @@ import { calculateExpiryDate } from './date';
 import { usePantryStore } from '@/store/pantryStore';
 
 /**
- * Marks food items as opened when they're used in a recipe.
+ * Marks food items as opened when they're used in a recipe and deducts appropriate quantities.
  * Updates the expiry dates based on opened shelf life.
  * 
- * @param recipeId The ID of the recipe being cooked
- * @param usedIngredients Array of food item IDs used in the recipe
+ * @param ingredientIds Array of food item IDs used in the recipe
+ * @param recipeIngredients Array of recipe ingredients with amounts
  * @returns Array of updated food items
  */
-export const markIngredientsAsOpened = (usedIngredients: string[]): FoodItem[] => {
-  // Get the pantry store and the toggle function
-  const { items, toggleItemOpenStatus } = usePantryStore.getState();
+export const markIngredientsAsOpened = (
+  ingredientIds: string[], 
+  recipeIngredients: Array<{name: string, amount?: number, unit?: string}>
+): FoodItem[] => {
+  // Get the pantry store functions
+  const { items, toggleItemOpenStatus, updateItem, removeItem } = usePantryStore.getState();
   
   // Track updated items
   const updatedItems: FoodItem[] = [];
   
   // Go through each used ingredient
-  usedIngredients.forEach(itemId => {
+  ingredientIds.forEach(itemId => {
     const item = items.find(i => i.id === itemId);
+    if (!item) return;
     
-    if (item && !item.isOpen) {
-      // If the item exists and is not already open, toggle its open status
-      toggleItemOpenStatus(itemId);
+    // Find matching recipe ingredient
+    const recipeIngredient = recipeIngredients.find(ri => 
+      (ri.name || '').toLowerCase().includes(item.name.toLowerCase()) ||
+      item.name.toLowerCase().includes((ri.name || '').toLowerCase())
+    );
+    
+    // Default to 1 if no specific amount is found
+    let amountNeeded = 1;
+    
+    if (recipeIngredient?.amount) {
+      // If recipe specifies an amount, use it
+      amountNeeded = recipeIngredient.amount;
       
-      // Find the updated item in the store after toggle
+      // Convert units if needed (simplified)
+      if (recipeIngredient.unit && item.unit && 
+          recipeIngredient.unit !== item.unit) {
+        // Very basic unit conversion - would need to be expanded for a real app
+        if (recipeIngredient.unit === 'tablespoon' && item.unit === 'g') {
+          amountNeeded = amountNeeded * 15; // Approx 15g per tablespoon
+        } else if (recipeIngredient.unit === 'teaspoon' && item.unit === 'g') {
+          amountNeeded = amountNeeded * 5; // Approx 5g per teaspoon
+        }
+        // Add other conversions as needed
+      }
+    }
+    
+    // Ensure we don't take more than available
+    const amountToUse = Math.min(amountNeeded, item.quantity);
+    
+    // Calculate remaining quantity
+    const remainingQuantity = Math.max(0, item.quantity - amountToUse);
+    
+    if (remainingQuantity <= 0) {
+      // If completely used up, remove the item
+      removeItem(item.id);
+      // Add to updated items for reporting
+      updatedItems.push({...item, quantity: 0});
+    } else {
+      // If there's some left, update the quantity
+      if (!item.isOpen) {
+        // If not already open, mark as open
+        toggleItemOpenStatus(item.id);
+      } else {
+        // If already open, just update the quantity
+        updateItem(item.id, { quantity: remainingQuantity });
+      }
+      
+      // Find the updated item after modifying
       const updatedItem = usePantryStore.getState().items.find(i => i.id === itemId);
       if (updatedItem) {
         updatedItems.push(updatedItem);
