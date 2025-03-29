@@ -41,7 +41,7 @@ export type ShoppingListItem = {
 };
 
 export const useRecipeStore = create<RecipeState>((set, get) => ({
-  recipes: mockRecipes,
+  recipes: [],
   isLoading: false,
   error: null,
   quotaExceeded: false,
@@ -54,7 +54,8 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
     dietaryPreferences = [],
     cuisinePreferences = []
   ) => {
-    set({ isLoading: true, error: null, quotaExceeded: false });
+    // Set empty array instead of mock recipes when loading starts
+    set({ isLoading: true, error: null, quotaExceeded: false, recipes: [] });
 
     try {
       // Log what we're searching for
@@ -73,9 +74,9 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
       if (!recipesData || recipesData.length === 0) {
         console.log("RecipeStore: No recipes returned from API");
         set({
-          recipes: mockRecipes,
+          recipes: [], // Set empty array instead of mock recipes
           error:
-            "No recipes found for your ingredients. Showing sample recipes instead.",
+            "No recipes found for your ingredients.",
           isLoading: false,
         });
         return;
@@ -106,11 +107,11 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
     } catch (error) {
       console.error("Recipe API error:", error);
 
-      // Fall back to mock data in case of API failure
+      // Set empty array and error message
       set({
-        recipes: mockRecipes,
+        recipes: [],
         error:
-          "An error occurred fetching recipes. Showing sample recipes instead.",
+          "An error occurred fetching recipes.",
         isLoading: false,
       });
     }

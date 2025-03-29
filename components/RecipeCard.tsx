@@ -15,6 +15,7 @@ import {
   ThumbsUp,
   ShoppingCart,
   Check,
+  Heart,
 } from "lucide-react-native";
 import CardContainer from "@/components/CardContainer";
 
@@ -36,15 +37,15 @@ try {
 
 interface RecipeCardProps {
   recipe: Recipe;
-  onPress: (recipe: Recipe) => void;
-  isSelected?: boolean;
-  onToggleSelect?: (recipe: Recipe) => void;
+  onPress: () => void;
+  isSelected: boolean;
+  onToggleSelect: (recipe: Recipe) => void;
 }
 
 const RecipeCard: React.FC<RecipeCardProps> = ({
   recipe,
   onPress,
-  isSelected = false,
+  isSelected,
   onToggleSelect,
 }) => {
   // Determine if we should use LinearGradient or fallback to a regular view
@@ -85,98 +86,159 @@ const RecipeCard: React.FC<RecipeCardProps> = ({
   };
 
   return (
-    <CardContainer style={styles.container} elevation="medium">
+    <View style={styles.cardWrapper}>
       <Pressable
-        style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
-        onPress={() => onPress(recipe)}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.cardPressed,
+        ]}
+        onPress={onPress}
         android_ripple={{ color: Colors.shadowLight }}
       >
         <View style={styles.imageContainer}>
           <Image
-            source={recipe.imageUrl}
+            source={recipe.imageUrl || "https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?q=80&w=300"}
             style={styles.image}
             contentFit="cover"
-            transition={300}
-            placeholder="blur"
+            transition={200}
           />
-
-          {/* Gradient overlay on image */}
-          <GradientComponent {...imageGradientProps} />
-
-          <View style={styles.titleContainer}>
-            <Text style={styles.title} numberOfLines={2}>
-              {recipe.title}
-            </Text>
-          </View>
-
-          {/* Selection button in the top-right corner */}
-          {onToggleSelect && (
-            <TouchableOpacity
-              style={[
-                styles.selectButton,
-                isSelected ? styles.selectedButton : {},
-              ]}
-              onPress={handleToggleSelect}
-            >
-              {isSelected ? (
-                <Check size={18} color="#FFF" />
-              ) : (
-                <ShoppingCart size={18} color="#FFF" />
-              )}
-            </TouchableOpacity>
+          {isSelected && (
+            <View style={styles.selectedBadge}>
+              <Heart size={16} color="#FFFFFF" fill="#FFFFFF" />
+            </View>
           )}
         </View>
-
         <View style={styles.content}>
+          <Text numberOfLines={2} style={styles.title}>
+            {recipe.title}
+          </Text>
           <View style={styles.metaContainer}>
             <View style={styles.metaItem}>
-              <Clock size={16} color={Colors.textLight} />
+              <Clock size={14} color={Colors.textLight} />
               <Text style={styles.metaText}>{recipe.readyInMinutes} min</Text>
             </View>
-
             <View style={styles.metaItem}>
-              <Users size={16} color={Colors.textLight} />
-              <Text style={styles.metaText}>{recipe.servings} servings</Text>
-            </View>
-
-            <View style={styles.metaItem}>
-              <ThumbsUp size={16} color={Colors.textLight} />
-              <Text style={styles.metaText}>{recipe.likes}</Text>
+              <Users size={14} color={Colors.textLight} />
+              <Text style={styles.metaText}>{recipe.servings}</Text>
             </View>
           </View>
-
-          <GradientComponent {...ingredientsGradientProps}>
-            <Text style={styles.ingredientsText}>
+          <View style={styles.usedIngredients}>
+            <Text style={styles.ingredientText}>
               Uses {recipe.usedIngredientCount} of your ingredients
-              {recipe.missedIngredientCount > 0 &&
+              {recipe.missedIngredientCount > 0 && 
                 ` (missing ${recipe.missedIngredientCount})`}
             </Text>
-          </GradientComponent>
+          </View>
         </View>
       </Pressable>
-    </CardContainer>
+      <Pressable 
+        style={[styles.selectButton, isSelected && styles.selectedButton]}
+        onPress={() => onToggleSelect(recipe)}
+      >
+        {isSelected ? (
+          <Heart size={18} color="#FFFFFF" fill="#FFFFFF" />
+        ) : (
+          <Heart size={18} color="#FFFFFF" />
+        )}
+      </Pressable>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  cardWrapper: {
+    width: "48%", // Use percentage instead of fixed width
     marginBottom: 16,
-    borderWidth: 0,
+    marginHorizontal: "1%", // Add small margin between cards
+    position: "relative",
   },
-  pressable: {
+  card: {
+    backgroundColor: Colors.card,
+    borderRadius: 10,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  pressed: {
+  cardPressed: {
     opacity: 0.9,
-    transform: [{ scale: 0.98 }],
   },
   imageContainer: {
     position: "relative",
+    height: 140,
+    backgroundColor: Colors.border,
   },
   image: {
-    width: "100%",
-    height: 180,
-    backgroundColor: "#f0f0f0",
+    flex: 1,
+    backgroundColor: Colors.border,
+  },
+  content: {
+    padding: 10,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: Colors.text,
+    marginBottom: 4,
+    height: 40, // Fixed height for title (2 lines)
+  },
+  metaContainer: {
+    flexDirection: "row",
+    marginTop: 4,
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  metaText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    marginLeft: 4,
+  },
+  usedIngredients: {
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.divider,
+    paddingRight: 8, // Add padding to prevent text overlap with button
+  },
+  ingredientText: {
+    fontSize: 11,
+    color: Colors.textLight,
+  },
+  selectedBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  selectButton: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    backgroundColor: Colors.secondary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    zIndex: 10,
+  },
+  selectedButton: {
+    backgroundColor: Colors.primary,
   },
   imageGradient: {
     position: "absolute",
@@ -185,66 +247,10 @@ const styles = StyleSheet.create({
     right: 0,
     height: 120,
   },
-  titleContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-    textShadowColor: "rgba(0, 0, 0, 0.75)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  selectButton: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: Colors.primary,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  selectedButton: {
-    backgroundColor: Colors.success,
-  },
-  content: {
-    padding: 16,
-  },
-  metaContainer: {
-    flexDirection: "row",
-    marginBottom: 12,
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  metaText: {
-    fontSize: 14,
-    color: Colors.textLight,
-  },
   ingredientsContainer: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
-  },
-  ingredientsText: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: "500",
   },
 });
 
