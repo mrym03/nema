@@ -52,7 +52,7 @@ export const fetchRecipesByIngredients = async (
     params.append("fillIngredients", "true"); // Get details about used/missed ingredients
     params.append("addRecipeInformation", "true"); // Get full recipe details
     params.append("sort", "max-used-ingredients"); // Sort by maximum used ingredients
-    params.append("number", "10"); // Limit to 10 recipes
+    params.append("number", "100"); // Limit to 10 recipes
 
     // Apply dietary preferences if provided
     if (dietaryPreferences && dietaryPreferences.length > 0) {
