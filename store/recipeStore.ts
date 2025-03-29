@@ -150,6 +150,16 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
         return enhancedRecipe;
       } catch (error) {
         console.error("Error fetching detailed recipe:", error);
+
+        // Also cache the basic recipe when we can't get details
+        // This prevents repeated failed API calls for the same recipe
+        set((state) => ({
+          cachedRecipeDetails: {
+            ...state.cachedRecipeDetails,
+            [id]: recipeFromState,
+          },
+        }));
+
         // If we can't get details, return what we have
         return recipeFromState;
       }
