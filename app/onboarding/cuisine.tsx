@@ -67,9 +67,11 @@ export default function CuisinePreferencesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>What cuisines do you prefer?</Text>
+        <Text style={styles.title}>
+          What cuisines do you want to cook today?
+        </Text>
         <Text style={styles.subtitle}>
-          Select all that apply. You can always change these later.
+          Select your favorite culinary traditions for this session
         </Text>
       </View>
 

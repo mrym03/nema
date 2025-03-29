@@ -91,9 +91,11 @@ export default function DietaryPreferencesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Do you have any dietary restrictions?</Text>
+        <Text style={styles.title}>
+          What are your dietary preferences for today?
+        </Text>
         <Text style={styles.subtitle}>
-          We'll customize recipes to match your preferences
+          We'll customize your recipe recommendations based on these choices
         </Text>
       </View>
 

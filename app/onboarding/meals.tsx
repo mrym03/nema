@@ -50,9 +50,11 @@ export default function MealsPerDayScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>How many meals do you want per day?</Text>
+        <Text style={styles.title}>
+          How many meals do you want to cook today?
+        </Text>
         <Text style={styles.subtitle}>
-          This helps us create your personalized meal plan.
+          This helps us recommend the right number of recipes
         </Text>
       </View>
 

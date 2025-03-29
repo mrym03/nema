@@ -20,7 +20,7 @@ export default function OnboardingIndex() {
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <Text style={{ marginBottom: 16, fontSize: 16, color: Colors.textLight }}>
-        Preparing your personalized experience...
+        Setting up your daily preferences...
       </Text>
       <ActivityIndicator size="large" color={Colors.primary} />
     </View>

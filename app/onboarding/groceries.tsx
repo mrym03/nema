@@ -45,9 +45,10 @@ export default function GroceryInputScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Add Your Groceries</Text>
+        <Text style={styles.title}>Ready to find recipes!</Text>
         <Text style={styles.subtitle}>
-          Let's capture what you already have to reduce food waste
+          Your preferences are set for this session. Now, how would you like to
+          add ingredients to your pantry?
         </Text>
       </View>
 
