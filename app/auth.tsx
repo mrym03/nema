@@ -1,84 +1,74 @@
-import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Image
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '@/utils/AuthContext';
-import Colors from '@/constants/colors';
+  Image,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/utils/AuthContext";
+import Colors from "@/constants/colors";
 
 export default function AuthScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const { signIn, signUp, loading } = useAuth();
   const router = useRouter();
 
   const handleAuth = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      Alert.alert("Error", "Please enter both email and password");
       return;
     }
 
     try {
       if (isSignUp) {
         await signUp(email, password);
-        Alert.alert('Success', 'Account created successfully');
+        Alert.alert("Success", "Account created successfully");
       } else {
         await signIn(email, password);
       }
-      
-      // Navigate to main app on success
-      router.replace('/(tabs)');
-    } catch (error) {
-      console.error('Auth error:', error);
-      Alert.alert(
-        'Authentication Error',
-        isSignUp ? 'Failed to create account' : 'Invalid email or password'
-      );
-    }
-  };
 
-  const handleTestLogin = async () => {
-    // Use a test account for quick login during development
-    setEmail('test@example.com');
-    setPassword('password123');
-    
-    try {
-      await signIn('test@example.com', 'password123');
-      router.replace('/(tabs)');
+      // Navigate to main app on success
+      router.replace("/(tabs)");
     } catch (error) {
-      console.error('Test login error:', error);
-      Alert.alert('Error', 'Failed to log in with test account');
+      console.error("Auth error:", error);
+      Alert.alert(
+        "Authentication Error",
+        isSignUp ? "Failed to create account" : "Invalid email or password"
+      );
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.formContainer}
       >
         <View style={styles.logoContainer}>
-          <Image 
-            source={{ uri: 'https://images.unsplash.com/photo-1517260739337-6799d239ce83?q=80&w=300' }} 
+          <Image
+            source={{
+              uri: "https://images.unsplash.com/photo-1517260739337-6799d239ce83?q=80&w=300",
+            }}
             style={styles.logo}
           />
           <Text style={styles.title}>Zero Waste Pantry</Text>
           <Text style={styles.subtitle}>Reduce food waste, save money</Text>
         </View>
 
-        <Text style={styles.authTitle}>{isSignUp ? 'Create Account' : 'Sign In'}</Text>
-        
+        <Text style={styles.authTitle}>
+          {isSignUp ? "Create Account" : "Sign In"}
+        </Text>
+
         <TextInput
           style={styles.input}
           placeholder="Email"
@@ -87,7 +77,7 @@ export default function AuthScreen() {
           autoCapitalize="none"
           keyboardType="email-address"
         />
-        
+
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -95,8 +85,8 @@ export default function AuthScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.authButton}
           onPress={handleAuth}
           disabled={loading}
@@ -105,34 +95,21 @@ export default function AuthScreen() {
             <ActivityIndicator color={Colors.background} />
           ) : (
             <Text style={styles.authButtonText}>
-              {isSignUp ? 'Sign Up' : 'Sign In'}
+              {isSignUp ? "Sign Up" : "Sign In"}
             </Text>
           )}
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.switchButton}
           onPress={() => setIsSignUp(!isSignUp)}
         >
           <Text style={styles.switchButtonText}>
-            {isSignUp 
-              ? 'Already have an account? Sign In' 
-              : 'Don\'t have an account? Sign Up'}
+            {isSignUp
+              ? "Already have an account? Sign In"
+              : "Don't have an account? Sign Up"}
           </Text>
         </TouchableOpacity>
-
-        {/* Test Login Button */}
-        <View style={styles.testLoginContainer}>
-          <TouchableOpacity 
-            style={styles.testLoginButton}
-            onPress={handleTestLogin}
-          >
-            <Text style={styles.testLoginText}>Test Login (Dev Mode)</Text>
-          </TouchableOpacity>
-          <Text style={styles.testLoginDescription}>
-            Quick login with test@example.com
-          </Text>
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -146,10 +123,10 @@ const styles = StyleSheet.create({
   formContainer: {
     flex: 1,
     padding: 24,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   logoContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 40,
   },
   logo: {
@@ -160,7 +137,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.primary,
     marginBottom: 8,
   },
@@ -171,7 +148,7 @@ const styles = StyleSheet.create({
   },
   authTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.text,
     marginBottom: 24,
   },
@@ -186,43 +163,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderRadius: 8,
     padding: 16,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 16,
   },
   authButtonText: {
     color: Colors.background,
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   switchButton: {
     padding: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   switchButtonText: {
     color: Colors.primary,
     fontSize: 16,
   },
-  testLoginContainer: {
-    marginTop: 24,
-    alignItems: 'center',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  testLoginButton: {
-    backgroundColor: Colors.secondary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  testLoginText: {
-    color: Colors.background,
-    fontWeight: 'bold',
-  },
-  testLoginDescription: {
-    fontSize: 12,
-    color: Colors.textLight,
-    textAlign: 'center',
-  },
-}); 
+});
