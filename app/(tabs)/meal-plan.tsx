@@ -869,11 +869,14 @@ export default function MealPlanScreen() {
         onRequestClose={() => setShowHelpModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>How Recipe Scoring Works</Text>
 
-            <View style={styles.modalScrollViewContainer}>
-              <ScrollView style={styles.modalScrollView}>
+            <ScrollView
+              style={styles.modalScrollContent}
+              contentContainerStyle={styles.modalContentContainer}
+            >
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>
                   Our Goal: Minimize Food Waste
                 </Text>
@@ -882,7 +885,9 @@ export default function MealPlanScreen() {
                   plan that helps reduce food waste by prioritizing ingredients
                   that will expire soon.
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>
                   Recipe Scoring Formula:
                 </Text>
@@ -894,7 +899,9 @@ export default function MealPlanScreen() {
                   scores. For example, an ingredient expiring in 2 days adds 5
                   points, while one expiring in 10 days adds only 1 point.
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>
                   Ingredient Overlap Bonus:
                 </Text>
@@ -906,7 +913,9 @@ export default function MealPlanScreen() {
                   ingredients get bonus points. This encourages efficient use of
                   ingredients across multiple meals.
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>Selection Process:</Text>
                 <Text style={styles.modalText}>
                   1. Calculate scores for all recipes
@@ -921,7 +930,9 @@ export default function MealPlanScreen() {
                 <Text style={styles.modalText}>
                   4. Repeat until we have filled the meal plan
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>Recipe Repetition:</Text>
                 <Text style={styles.modalText}>
                   When you have fewer recipes than needed for a full week, the
@@ -931,12 +942,16 @@ export default function MealPlanScreen() {
                   with a small badge showing how many times they appear in your
                   plan.
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>Score Breakdown:</Text>
                 <Text style={styles.modalText}>
                   Each recipe shows its score as (Base + Overlap Bonus)
                 </Text>
+              </View>
 
+              <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>Meals Per Day:</Text>
                 <Text style={styles.modalText}>
                   The meal planner respects your preference for how many meals
@@ -950,8 +965,8 @@ export default function MealPlanScreen() {
                     .join(", ")}
                   .
                 </Text>
-              </ScrollView>
-            </View>
+              </View>
+            </ScrollView>
 
             <TouchableOpacity
               style={styles.closeButton}
@@ -1322,12 +1337,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 20,
   },
-  modalContent: {
+  modalContainer: {
     width: "90%",
     backgroundColor: Colors.card,
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     maxHeight: "80%",
+    overflow: "hidden",
   },
   modalTitle: {
     fontSize: 20,
@@ -1336,17 +1352,18 @@ const styles = StyleSheet.create({
     color: Colors.text,
     textAlign: "center",
   },
-  modalScrollViewContainer: {
-    flex: 1,
-    maxHeight: "70%",
+  modalScrollContent: {
+    maxHeight: 400,
   },
-  modalScrollView: {
-    flex: 1,
+  modalContentContainer: {
+    paddingBottom: 20,
+  },
+  modalSection: {
+    marginBottom: 16,
   },
   modalSubtitle: {
     fontSize: 16,
     fontWeight: "bold",
-    marginTop: 16,
     marginBottom: 8,
     color: Colors.text,
   },
