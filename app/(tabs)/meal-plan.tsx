@@ -222,6 +222,22 @@ export default function MealPlanScreen() {
     router.push("/recipes");
   };
 
+  // Helper function to get the meal display name
+  const getMealDisplayName = (
+    mealType: "breakfast" | "lunch" | "dinner"
+  ): string => {
+    switch (mealType) {
+      case "breakfast":
+        return "1st Meal";
+      case "lunch":
+        return "2nd Meal";
+      case "dinner":
+        return "3rd Meal";
+      default:
+        return mealType; // Fallback
+    }
+  };
+
   // Render a meal item that's already in the plan
   const renderMealItem = (meal: MealPlanItem) => {
     // Find the recipe in suggested recipes to get the detailed score info
@@ -313,7 +329,9 @@ export default function MealPlanScreen() {
       }}
     >
       <Plus size={24} color={Colors.textLight} />
-      <Text style={styles.emptyMealText}>Add {mealType}</Text>
+      <Text style={styles.emptyMealText}>
+        Add {getMealDisplayName(mealType)}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -423,7 +441,7 @@ export default function MealPlanScreen() {
           <View style={{ flexDirection: "row", alignItems: "center" }}>
             {getMealIcon()}
             <Text style={styles.mealTypeText}>
-              {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
+              {getMealDisplayName(mealType)}
             </Text>
           </View>
 
@@ -927,7 +945,10 @@ export default function MealPlanScreen() {
                   {mealsPerDay === 1 ? "meal" : "meals"} per day configured.
                   This means your meal plan will include only the first{" "}
                   {mealsPerDay} meal types:{" "}
-                  {MEAL_TYPES.slice(0, mealsPerDay).join(", ")}.
+                  {MEAL_TYPES.slice(0, mealsPerDay)
+                    .map((mealType) => getMealDisplayName(mealType))
+                    .join(", ")}
+                  .
                 </Text>
               </ScrollView>
             </View>
