@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Zero Waste Pantry",
+    "slug": "zero-waste-pantry",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "myapp",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.zerowastepantry",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan barcodes on food items, scan expiration dates, and identify foods using AI.",
+        "NSPhotoLibraryUsageDescription": "This app uses photos to scan expiration dates and identify foods."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE"
+      ],
+      "package": "com.yourcompany.zerowastepantry"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-barcode-scanner",
+        {
+          "cameraPermission": "Allow Zero Waste Pantry to access your camera to scan barcodes and identify foods."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Zero Waste Pantry to access your photos to scan expiration dates and identify foods."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    }
+  }
+}
