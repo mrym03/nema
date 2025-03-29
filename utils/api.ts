@@ -13,7 +13,7 @@ const FIREBASE_CONFIG = {
 };
 
 // Spoonacular API for recipes
-const SPOONACULAR_API_KEY = "5aa1b842d153413baa1b6862d0c78d79";
+const SPOONACULAR_API_KEY = "a4bc0ef0cd194e07b1936f695397ac29";
 const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
 
 // UPC database API for barcode scanning
@@ -27,26 +27,41 @@ const DEV_MODE = true; // Temporarily using development mode until Supabase tabl
 // For now, we'll simulate Firebase with AsyncStorage
 
 // Recipe API functions
-export const fetchRecipesByIngredients = async (ingredients: string[]) => {
+export const fetchRecipesByIngredients = async (
+  ingredients: string[],
+  dietaryPreferences: string[] = []
+) => {
   try {
     if (ingredients.length === 0) {
-      console.log('No ingredients provided, returning empty results');
+      console.log("No ingredients provided, returning empty results");
       return [];
     }
-    
-    const ingredientsString = ingredients.join(',');
+
+    const ingredientsString = ingredients.join(",");
     console.log(`Fetching recipes for ingredients: ${ingredientsString}`);
-    
+
+    // Build diet parameter if user has dietary preferences
+    let dietParam = "";
+    if (dietaryPreferences && dietaryPreferences.length > 0) {
+      dietParam = `&diet=${dietaryPreferences.join(",")}`;
+      console.log(`Applied dietary filters: ${dietaryPreferences.join(",")}`);
+    }
+
     // Step 1: Find recipes that match our ingredients
     const findResponse = await fetch(
-      `${SPOONACULAR_BASE_URL}/recipes/findByIngredients?ingredients=${ingredientsString}&number=10&ranking=1&ignorePantry=false&apiKey=${SPOONACULAR_API_KEY}`
+      `${SPOONACULAR_BASE_URL}/recipes/findByIngredients?ingredients=${ingredientsString}&number=10&ranking=1&ignorePantry=false&apiKey=${SPOONACULAR_API_KEY}${dietParam}`
     );
-    
+
     if (!findResponse.ok) {
+      // Check specifically for quota exceeded error
+      if (findResponse.status === 402) {
+        console.log("API quota exceeded (402) - using mock data instead");
+        throw new Error("API_QUOTA_EXCEEDED");
+      }
       throw new Error(`API error: ${findResponse.status}`);
     }
-    
-    const recipesBasicInfo = await findResponse.json() as Array<{
+
+    const recipesBasicInfo = (await findResponse.json()) as Array<{
       id: number;
       title: string;
       image: string;
@@ -54,38 +69,46 @@ export const fetchRecipesByIngredients = async (ingredients: string[]) => {
       missedIngredientCount: number;
       likes: number;
     }>;
-    
+
     if (!recipesBasicInfo || recipesBasicInfo.length === 0) {
-      console.log('No recipes found for the given ingredients');
+      console.log("No recipes found for the given ingredients");
       return [];
     }
-    
+
     console.log(`Found ${recipesBasicInfo.length} recipes for the ingredients`);
-    
+
     // Step 2: Get more detailed information for each recipe
-    const recipeIds = recipesBasicInfo.map((recipe) => recipe.id).join(',');
+    const recipeIds = recipesBasicInfo.map((recipe) => recipe.id).join(",");
     const detailsResponse = await fetch(
       `${SPOONACULAR_BASE_URL}/recipes/informationBulk?ids=${recipeIds}&apiKey=${SPOONACULAR_API_KEY}`
     );
-    
+
     if (!detailsResponse.ok) {
+      // Check specifically for quota exceeded error here too
+      if (detailsResponse.status === 402) {
+        console.log("API quota exceeded (402) - using mock data instead");
+        throw new Error("API_QUOTA_EXCEEDED");
+      }
+
       // If we can't get details, we'll just use the basic info
-      console.warn(`Couldn't fetch detailed recipe info: ${detailsResponse.status}`);
+      console.warn(
+        `Couldn't fetch detailed recipe info: ${detailsResponse.status}`
+      );
       return recipesBasicInfo.map((item) => ({
         id: item.id.toString(),
         title: item.title,
         imageUrl: item.image,
         readyInMinutes: 30, // Default value
         servings: 4, // Default value
-        sourceUrl: '',
-        summary: '',
+        sourceUrl: "",
+        summary: "",
         usedIngredientCount: item.usedIngredientCount,
         missedIngredientCount: item.missedIngredientCount,
-        likes: item.likes || 0
+        likes: item.likes || 0,
       }));
     }
-    
-    const detailedRecipes = await detailsResponse.json() as Array<{
+
+    const detailedRecipes = (await detailsResponse.json()) as Array<{
       id: number;
       title: string;
       image: string;
@@ -95,22 +118,24 @@ export const fetchRecipesByIngredients = async (ingredients: string[]) => {
       summary: string;
       aggregateLikes: number;
     }>;
-    
+
     // Step 3: Merge the detailed info with the ingredient matching info
     return detailedRecipes.map((detailedRecipe) => {
-      const basicInfo = recipesBasicInfo.find((r) => r.id === detailedRecipe.id);
-      
+      const basicInfo = recipesBasicInfo.find(
+        (r) => r.id === detailedRecipe.id
+      );
+
       return {
         id: detailedRecipe.id.toString(),
         title: detailedRecipe.title,
         imageUrl: detailedRecipe.image,
         readyInMinutes: detailedRecipe.readyInMinutes,
         servings: detailedRecipe.servings,
-        sourceUrl: detailedRecipe.sourceUrl || '',
-        summary: detailedRecipe.summary || '',
+        sourceUrl: detailedRecipe.sourceUrl || "",
+        summary: detailedRecipe.summary || "",
         usedIngredientCount: basicInfo ? basicInfo.usedIngredientCount : 0,
         missedIngredientCount: basicInfo ? basicInfo.missedIngredientCount : 0,
-        likes: detailedRecipe.aggregateLikes || 0
+        likes: detailedRecipe.aggregateLikes || 0,
       };
     });
   } catch (error) {

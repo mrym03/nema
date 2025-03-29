@@ -35,10 +35,8 @@ export default function AuthScreen() {
         Alert.alert("Success", "Account created successfully");
       } else {
         await signIn(email, password);
+        console.log("Authentication successful");
       }
-
-      // Navigate to main app on success
-      router.replace("/(tabs)");
     } catch (error) {
       console.error("Auth error:", error);
       Alert.alert(

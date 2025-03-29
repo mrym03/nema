@@ -60,7 +60,7 @@
   },
   "private": true,
   "config": {
-    "spoonacular_api_key": "5aa1b842d153413baa1b6862d0c78d79",
+    "spoonacular_api_key": "a4bc0ef0cd194e07b1936f695397ac29",
     "supabase": {
       "url": "https://udhmqpwaysikuompqyxy.supabase.co",
       "anonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkaG1xcHdheXNpa3VvbXBxeXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDMyMDUzODAsImV4cCI6MjA1ODc4MTM4MH0.MMTtubV97B67bVNQy3HO9TBgzd4a-S7y088ZUEahH5g"
