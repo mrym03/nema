@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "./supabase";
 import { FoodItem, ShoppingListItem, Recipe } from "@/types";
+import {
+  fetchRecipesByIngredients as fetchMealDbRecipes,
+  getRecipeDetails as getMealDbRecipeDetails,
+} from "./mealDbApi";
 
 // Firebase configuration
 const FIREBASE_CONFIG = {
@@ -20,129 +24,19 @@ const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
 const UPC_DATABASE_API_KEY = "E08F735364A32F6FAFC0C06F803E0B9D";
 const UPC_DATABASE_BASE_URL = "https://api.upcdatabase.org/product";
 
+// Replace Spoonacular API with TheMealDB API
+const THEMEALDB_API_KEY = "1"; // Using the test API key "1" for development
+const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
+
 // Development mode flag - true if using placeholder Supabase credentials
 const DEV_MODE = true; // Temporarily using development mode until Supabase tables are created
 
 // Firebase initialization would normally happen here
 // For now, we'll simulate Firebase with AsyncStorage
 
-// Recipe API functions
-export const fetchRecipesByIngredients = async (
-  ingredients: string[],
-  dietaryPreferences: string[] = [],
-  cuisinePreferences: string[] = []
-) => {
-  try {
-    if (ingredients.length === 0) {
-      console.log("No ingredients provided, returning empty results");
-      return [];
-    }
-
-    const ingredientsString = ingredients.join(",");
-    console.log(`Fetching recipes for ingredients: ${ingredientsString}`);
-
-    // Build query parameters
-    const params = new URLSearchParams();
-
-    // Add API key
-    params.append("apiKey", SPOONACULAR_API_KEY);
-
-    // Use complex search instead of findByIngredients for better filtering
-    params.append("includeIngredients", ingredientsString);
-    params.append("fillIngredients", "true"); // Get details about used/missed ingredients
-    params.append("addRecipeInformation", "true"); // Get full recipe details
-    params.append("sort", "max-used-ingredients"); // Sort by maximum used ingredients
-    params.append("number", "100"); // Limit to 10 recipes
-
-    // Apply dietary preferences if provided
-    if (dietaryPreferences && dietaryPreferences.length > 0) {
-      params.append("diet", dietaryPreferences.join(","));
-      console.log(`Applied dietary filters: ${dietaryPreferences.join(",")}`);
-    }
-
-    // Apply cuisine preferences if provided
-    if (cuisinePreferences && cuisinePreferences.length > 0) {
-      params.append("cuisine", cuisinePreferences.join(","));
-      console.log(`Applied cuisine filters: ${cuisinePreferences.join(",")}`);
-    }
-
-    // Use the complexSearch endpoint for better filtering
-    const searchUrl = `${SPOONACULAR_BASE_URL}/recipes/complexSearch?${params.toString()}`;
-    const response = await fetch(searchUrl);
-
-    if (!response.ok) {
-      // Check specifically for quota exceeded error
-      if (response.status === 402) {
-        console.log("API quota exceeded (402) - using mock data instead");
-        throw new Error("API_QUOTA_EXCEEDED");
-      }
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const searchResults = await response.json();
-
-    if (!searchResults.results || searchResults.results.length === 0) {
-      console.log("No recipes found for the given ingredients and preferences");
-      return [];
-    }
-
-    console.log(
-      `Found ${searchResults.results.length} recipes matching criteria`
-    );
-
-    // Transform the data to match our Recipe type
-    return searchResults.results.map((recipe: any) => ({
-      id: recipe.id.toString(),
-      title: recipe.title,
-      imageUrl: recipe.image, // Image URL from API
-      readyInMinutes: recipe.readyInMinutes || 30,
-      servings: recipe.servings || 4,
-      sourceUrl: recipe.sourceUrl || "",
-      summary: recipe.summary || "",
-      usedIngredientCount: recipe.usedIngredientCount || 0,
-      missedIngredientCount: recipe.missedIngredientCount || 0,
-      likes: recipe.aggregateLikes || 0,
-    }));
-  } catch (error) {
-    console.error("Error fetching recipes:", error);
-    throw error;
-  }
-};
-
-// Get detailed information for a specific recipe
-export const getRecipeDetails = async (recipeId: string) => {
-  try {
-    const url = `${SPOONACULAR_BASE_URL}/recipes/${recipeId}/information?apiKey=${SPOONACULAR_API_KEY}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      if (response.status === 402) {
-        throw new Error("API_QUOTA_EXCEEDED");
-      }
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const recipeDetails = await response.json();
-
-    return {
-      id: recipeDetails.id.toString(),
-      title: recipeDetails.title,
-      imageUrl: recipeDetails.image,
-      readyInMinutes: recipeDetails.readyInMinutes || 30,
-      servings: recipeDetails.servings || 4,
-      sourceUrl: recipeDetails.sourceUrl || "",
-      summary: recipeDetails.summary || "",
-      instructions: recipeDetails.instructions || "",
-      extendedIngredients: recipeDetails.extendedIngredients || [],
-      usedIngredientCount: 0, // These will be filled in by the calling code
-      missedIngredientCount: 0,
-      likes: recipeDetails.aggregateLikes || 0,
-    };
-  } catch (error) {
-    console.error(`Error fetching details for recipe ${recipeId}:`, error);
-    throw error;
-  }
-};
+// Recipe API functions - using TheMealDB API
+export const fetchRecipesByIngredients = fetchMealDbRecipes;
+export const getRecipeDetails = getMealDbRecipeDetails;
 
 // Barcode lookup function
 export const lookupBarcodeUPC = async (barcode: string) => {

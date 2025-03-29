@@ -47,8 +47,7 @@ try {
 export default function RecipesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { recipes, isLoading, error, quotaExceeded, fetchRecipes } =
-    useRecipeStore();
+  const { recipes, isLoading, error, fetchRecipes } = useRecipeStore();
   const { items } = usePantryStore();
   const { preferences } = usePreferences();
   const [refreshing, setRefreshing] = useState(false);
@@ -66,19 +65,29 @@ export default function RecipesScreen() {
   // Function to fetch recipes based on pantry ingredients and user preferences
   const fetchRecipesFromPantry = async () => {
     const ingredientNames = getIngredientNames();
-    console.log("Fetching recipes for ingredients:", ingredientNames);
+    console.log(
+      `Pantry contains ${ingredientNames.length} ingredients:`,
+      ingredientNames
+    );
 
-    // Convert dietary preferences to Spoonacular format
+    // Convert dietary preferences to TheMealDB-friendly format
+    // TheMealDB doesn't have dedicated API filters, but we'll use these for manual filtering
     const dietaryPrefs = preferences.dietaryPreferences.map((pref) => {
-      // Handle special cases for Spoonacular API
+      // Map app preference keys to simpler filter terms
       if (pref === "glutenFree") return "gluten free";
       if (pref === "dairyFree") return "dairy free";
       if (pref === "lowCarb") return "low carb";
+      if (pref === "vegetarian") return "vegetarian";
+      if (pref === "vegan") return "vegan";
       return pref;
     });
 
-    // Convert cuisine preferences
-    const cuisinePrefs = preferences.cuisinePreferences;
+    // Convert cuisine preferences to expected format for TheMealDB areas
+    // TheMealDB uses specific area names like "Italian", "Chinese", etc.
+    const cuisinePrefs = preferences.cuisinePreferences.map((cuisine) => {
+      // Standardize cuisine names for better matching with TheMealDB areas
+      return cuisine.toLowerCase();
+    });
 
     // Log what we're using for filtering
     if (dietaryPrefs.length > 0) {
@@ -88,7 +97,18 @@ export default function RecipesScreen() {
       console.log("Applying cuisine preferences:", cuisinePrefs);
     }
 
-    await fetchRecipes(ingredientNames, dietaryPrefs, cuisinePrefs);
+    // Ensure we have a stable set of ingredients by handling duplicates and empty strings
+    const cleanedIngredients = ingredientNames
+      .filter((name) => name && name.trim().length > 0) // Remove empty names
+      .map((name) => name.trim()); // Clean whitespace
+
+    try {
+      // Fetch recipes with our cleaned ingredients and preferences
+      // Even if pantry is empty, we'll still get recipes based on preferences
+      await fetchRecipes(cleanedIngredients, dietaryPrefs, cuisinePrefs);
+    } catch (error) {
+      console.error("Error fetching recipes:", error);
+    }
   };
 
   // Handle pull-to-refresh
@@ -151,28 +171,13 @@ export default function RecipesScreen() {
     if (error) {
       return (
         <View style={styles.centered}>
-          {quotaExceeded ? (
-            <>
-              <AlertTriangle size={36} color={Colors.warning} />
-              <Text style={styles.quotaTitle}>API Quota Reached</Text>
-              <Text style={styles.errorText}>
-                We've reached our daily recipe search limit. Showing sample
-                recipes instead. These will refresh tomorrow.
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.errorText}>
-                Couldn't fetch recipes: {error}
-              </Text>
-              <Pressable
-                style={styles.retryButton}
-                onPress={fetchRecipesFromPantry}
-              >
-                <Text style={styles.retryButtonText}>Try Again</Text>
-              </Pressable>
-            </>
-          )}
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={fetchRecipesFromPantry}
+          >
+            <Text style={styles.retryButtonText}>Try Again</Text>
+          </Pressable>
         </View>
       );
     }

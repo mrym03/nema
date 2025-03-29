@@ -16,7 +16,10 @@ export const SUPABASE_ANON_KEY =
 export const UPC_DATABASE_API_KEY = "E08F735364A32F6FAFC0C06F803E0B9D";
 
 // Spoonacular API Key
-export const SPOONACULAR_API_KEY = "a4bc0ef0cd194e07b1936f695397ac29";
+export const SPOONACULAR_API_KEY = "1c6f5046cf0442c4bcd7287c35495b5a";
+
+// Replace with TheMealDB API key
+export const THEMEALDB_API_KEY = "1"; // Using the test API key "1" for development
 
 // Configuration flags
 export const USE_MOCK_OCR = false; // Set to false to use real OpenAI API

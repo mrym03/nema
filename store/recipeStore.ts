@@ -33,11 +33,32 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
     set({ isLoading: true, error: null, quotaExceeded: false });
 
     try {
-      // Use the real Spoonacular API with user preferences
+      // Log what we're searching for
+      console.log(
+        `RecipeStore: Fetching recipes with ${ingredients.length} ingredients`
+      );
+
+      // Use the TheMealDB API with user preferences
       const recipesData = await fetchRecipesByIngredients(
         ingredients,
         dietaryPreferences,
         cuisinePreferences
+      );
+
+      // Check if we got any recipes
+      if (!recipesData || recipesData.length === 0) {
+        console.log("RecipeStore: No recipes returned from API");
+        set({
+          recipes: mockRecipes,
+          error:
+            "No recipes found for your ingredients. Showing sample recipes instead.",
+          isLoading: false,
+        });
+        return;
+      }
+
+      console.log(
+        `RecipeStore: Received ${recipesData.length} recipes from API`
       );
 
       // Transform the data to match our Recipe type if needed
@@ -54,25 +75,18 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
         likes: item.likes || 0,
       }));
 
+      console.log(
+        `RecipeStore: Setting ${formattedRecipes.length} recipes in state`
+      );
       set({ recipes: formattedRecipes, isLoading: false });
     } catch (error) {
       console.error("Recipe API error:", error);
 
-      // Check if this is a quota exceeded error
-      const isQuotaError =
-        error instanceof Error &&
-        (error.message === "API_QUOTA_EXCEEDED" ||
-          error.message.includes("API error: 402"));
-
       // Fall back to mock data in case of API failure
       set({
         recipes: mockRecipes,
-        quotaExceeded: isQuotaError,
-        error: isQuotaError
-          ? "Daily API quota exceeded. Showing sample recipes instead."
-          : error instanceof Error
-          ? error.message
-          : "Failed to fetch recipes",
+        error:
+          "An error occurred fetching recipes. Showing sample recipes instead.",
         isLoading: false,
       });
     }

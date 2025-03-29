@@ -13,21 +13,21 @@ export interface FoodItem {
   openedShelfLife?: number; // Shelf life in days when opened
 }
 
-export type FoodCategory = 
-  | 'fruits' 
-  | 'vegetables' 
-  | 'dairy' 
-  | 'meat' 
-  | 'seafood' 
-  | 'grains' 
-  | 'bakery' 
-  | 'canned' 
-  | 'frozen' 
-  | 'snacks' 
-  | 'beverages' 
-  | 'condiments' 
-  | 'spices' 
-  | 'other';
+export type FoodCategory =
+  | "fruits"
+  | "vegetables"
+  | "dairy"
+  | "meat"
+  | "seafood"
+  | "grains"
+  | "bakery"
+  | "canned"
+  | "frozen"
+  | "snacks"
+  | "beverages"
+  | "condiments"
+  | "spices"
+  | "other";
 
 export interface Recipe {
   id: string;
@@ -45,10 +45,10 @@ export interface Recipe {
 }
 
 export interface RecipeIngredient {
-  id?: number;
+  id?: number | string; // Allow both number and string IDs to support TheMealDB
   name?: string;
   originalName?: string;
-  amount?: number;
+  amount?: number | string; // Allow string amounts for TheMealDB
   unit?: string;
   aisle?: string;
   original?: string;
