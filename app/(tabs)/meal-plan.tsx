@@ -6,9 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  FlatList,
   Dimensions,
-  SectionList,
   ScrollView,
   Platform,
   Pressable,
@@ -70,7 +68,7 @@ const DAYS_OF_WEEK = [
   "Saturday",
 ];
 const MEAL_TYPES = ["breakfast", "lunch", "dinner"] as const;
-type MealType = typeof MEAL_TYPES[number]; // This creates a union type of the array values
+type MealType = (typeof MEAL_TYPES)[number]; // This creates a union type of the array values
 
 // Define text disabled color without modifying the Colors object
 const TEXT_DISABLED = "#C5C5C5"; // Light gray for disabled text
@@ -82,23 +80,23 @@ let Animatable: any = { View };
 // Try to import the libraries, but use fallbacks if they fail
 try {
   // First try the Expo version of LinearGradient
-  LinearGradient = require('expo-linear-gradient').LinearGradient;
+  LinearGradient = require("expo-linear-gradient").LinearGradient;
 } catch (e) {
   try {
     // Fall back to react-native-linear-gradient if Expo version fails
-    LinearGradient = require('react-native-linear-gradient').LinearGradient;
+    LinearGradient = require("react-native-linear-gradient").LinearGradient;
   } catch (e) {
-    console.warn('Linear gradient not available, using fallback');
+    console.warn("Linear gradient not available, using fallback");
   }
 }
 
 try {
-  Animatable = require('react-native-animatable');
+  Animatable = require("react-native-animatable");
 } catch (e) {
-  console.warn('react-native-animatable not available, using fallback');
+  console.warn("react-native-animatable not available, using fallback");
 }
 
-// Calculate days until expiry for an ingredient 
+// Calculate days until expiry for an ingredient
 const getDaysUntilExpiry = (expiryDate: string): number => {
   if (!expiryDate) return 100; // Default large number if no expiry
 
@@ -202,8 +200,8 @@ export default function MealPlanScreen() {
 
   const viewRecipeDetails = (recipeId: string) => {
     // First check if the recipe exists in suggested recipes
-    const recipe = suggestedRecipes.find(r => r.id === recipeId);
-    
+    const recipe = suggestedRecipes.find((r) => r.id === recipeId);
+
     if (recipe) {
       // Navigate to recipe details
       router.push({
@@ -232,15 +230,13 @@ export default function MealPlanScreen() {
     ) as ScoredRecipe;
 
     // Calculate how many times this meal appears in the plan
-    const occurrenceCount = mealPlan.filter(m => m.recipeId === meal.recipeId).length;
+    const occurrenceCount = mealPlan.filter(
+      (m) => m.recipeId === meal.recipeId
+    ).length;
     const isRepeated = occurrenceCount > 1;
 
     return (
-      <Animatable.View
-        animation="fadeIn"
-        duration={300}
-        style={styles.mealCard}
-      >
+      <View style={styles.mealCard}>
         <Pressable
           style={({ pressed }) => [
             styles.mealCardInner,
@@ -268,15 +264,20 @@ export default function MealPlanScreen() {
             <View style={styles.mealMeta}>
               <Clock size={14} color={Colors.textLight} />
               <Text style={styles.mealMetaText}>20-30 min</Text>
-              
+
               {meal.score > 0 && (
                 <View style={styles.scoreRow}>
-                  <Star size={14} color={Colors.warning} style={{ marginLeft: 8 }} />
+                  <Star
+                    size={14}
+                    color={Colors.warning}
+                    style={{ marginLeft: 8 }}
+                  />
                   <Text style={styles.scoreText}>{meal.score.toFixed(1)}</Text>
-                  
+
                   {recipeDetails?.calculatedScore && (
                     <Text style={styles.scoreBreakdown}>
-                      ({recipeDetails.calculatedScore.baseScore.toFixed(1)} + {recipeDetails.calculatedScore.overlapBonus.toFixed(1)})
+                      ({recipeDetails.calculatedScore.baseScore.toFixed(1)} +{" "}
+                      {recipeDetails.calculatedScore.overlapBonus.toFixed(1)})
                     </Text>
                   )}
                 </View>
@@ -290,14 +291,12 @@ export default function MealPlanScreen() {
             <Text style={styles.removeMealText}>✕</Text>
           </TouchableOpacity>
         </Pressable>
-      </Animatable.View>
+      </View>
     );
   };
 
   // Update the renderEmptyMealSlot function to properly show suggestions
-  const renderEmptyMealSlot = (
-    mealType: "breakfast" | "lunch" | "dinner"
-  ) => (
+  const renderEmptyMealSlot = (mealType: "breakfast" | "lunch" | "dinner") => (
     <TouchableOpacity
       style={styles.emptyMealSlot}
       onPress={() => {
@@ -306,7 +305,7 @@ export default function MealPlanScreen() {
         // Then toggle the expansion and suggestions states
         setExpandedMeal(mealType);
         setShowSuggestions(true);
-        
+
         // If we don't have suggested recipes yet, generate them
         if (suggestedRecipes.length === 0 && !isLoading) {
           handleGenerateMealPlan();
@@ -324,7 +323,9 @@ export default function MealPlanScreen() {
       return (
         <View style={styles.suggestionsLoader}>
           <ActivityIndicator size="small" color={Colors.primary} />
-          <Text style={styles.suggestionsLoaderText}>Loading suggestions...</Text>
+          <Text style={styles.suggestionsLoaderText}>
+            Loading suggestions...
+          </Text>
         </View>
       );
     }
@@ -332,7 +333,9 @@ export default function MealPlanScreen() {
     if (suggestedRecipes.length === 0) {
       return (
         <View style={styles.suggestionsEmpty}>
-          <Text style={styles.suggestionsEmptyText}>No recipe suggestions available</Text>
+          <Text style={styles.suggestionsEmptyText}>
+            No recipe suggestions available
+          </Text>
         </View>
       );
     }
@@ -340,13 +343,18 @@ export default function MealPlanScreen() {
     return (
       <View style={styles.suggestionsContainer}>
         <Text style={styles.suggestionsTitle}>Select a recipe:</Text>
-        <FlatList
-          data={suggestedRecipes}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
+        <ScrollView style={styles.suggestionsList} nestedScrollEnabled={true}>
+          {suggestedRecipes.map((item) => (
             <TouchableOpacity
+              key={item.id}
               style={styles.suggestionItem}
-              onPress={() => handleAddToMealPlan(item as ScoredRecipe, activeDay, activeMealType as any)}
+              onPress={() =>
+                handleAddToMealPlan(
+                  item as ScoredRecipe,
+                  activeDay,
+                  activeMealType as any
+                )
+              }
             >
               <Image
                 source={item.imageUrl}
@@ -367,11 +375,8 @@ export default function MealPlanScreen() {
                 )}
               </View>
             </TouchableOpacity>
-          )}
-          style={styles.suggestionsList}
-          maxToRenderPerBatch={5}
-          initialNumToRender={5}
-        />
+          ))}
+        </ScrollView>
       </View>
     );
   };
@@ -385,12 +390,26 @@ export default function MealPlanScreen() {
     // Get the appropriate icon for the meal type
     const getMealIcon = () => {
       switch (mealType) {
-        case 'breakfast':
-          return <Coffee size={16} color={Colors.primary} style={{ marginRight: 8 }} />;
-        case 'lunch':
-          return <UtensilsCrossed size={16} color={Colors.primary} style={{ marginRight: 8 }} />;
-        case 'dinner':
-          return <Soup size={16} color={Colors.primary} style={{ marginRight: 8 }} />;
+        case "breakfast":
+          return (
+            <Coffee
+              size={16}
+              color={Colors.primary}
+              style={{ marginRight: 8 }}
+            />
+          );
+        case "lunch":
+          return (
+            <UtensilsCrossed
+              size={16}
+              color={Colors.primary}
+              style={{ marginRight: 8 }}
+            />
+          );
+        case "dinner":
+          return (
+            <Soup size={16} color={Colors.primary} style={{ marginRight: 8 }} />
+          );
         default:
           return null;
       }
@@ -401,13 +420,13 @@ export default function MealPlanScreen() {
     return (
       <View style={styles.mealSlot}>
         <View style={styles.mealSlotHeader}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
             {getMealIcon()}
             <Text style={styles.mealTypeText}>
               {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
             </Text>
           </View>
-          
+
           {mealsForSlot.length === 0 && (
             <TouchableOpacity
               onPress={() => {
@@ -417,11 +436,11 @@ export default function MealPlanScreen() {
               }}
               style={styles.expandButton}
             >
-              <ChevronDown 
-                size={18} 
+              <ChevronDown
+                size={18}
                 color={Colors.textLight}
-                style={{ 
-                  transform: [{ rotate: isExpanded ? '180deg' : '0deg' }]
+                style={{
+                  transform: [{ rotate: isExpanded ? "180deg" : "0deg" }],
                 }}
               />
             </TouchableOpacity>
@@ -429,21 +448,19 @@ export default function MealPlanScreen() {
         </View>
 
         {mealsForSlot.length > 0 ? (
-          <FlatList
-            data={mealsForSlot}
-            renderItem={({ item }) => renderMealItem(item)}
-            keyExtractor={(item) => item.id}
-            horizontal={false}
-            scrollEnabled={false}
-          />
+          <View>
+            {mealsForSlot.map((item) => (
+              <React.Fragment key={item.id}>
+                {renderMealItem(item)}
+              </React.Fragment>
+            ))}
+          </View>
         ) : (
           renderEmptyMealSlot(mealType)
         )}
-        
+
         {/* Show suggestions when this meal slot is expanded */}
-        {isExpanded && showSuggestions && (
-          renderSuggestedRecipes()
-        )}
+        {isExpanded && showSuggestions && renderSuggestedRecipes()}
       </View>
     );
   };
@@ -477,9 +494,7 @@ export default function MealPlanScreen() {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>
-            Generating your meal plan...
-          </Text>
+          <Text style={styles.loadingText}>Generating your meal plan...</Text>
         </View>
       );
     }
@@ -487,7 +502,9 @@ export default function MealPlanScreen() {
     return (
       <EmptyState
         title="No Recipes Selected"
-        message={`Go to the Recipes tab first and select the recipes you want in your meal plan. You'll need at least ${mealsPerDay} recipes per day (${mealsPerDay * 7} total for a week).`}
+        message={`Go to the Recipes tab first and select the recipes you want in your meal plan. You'll need at least ${mealsPerDay} recipes per day (${
+          mealsPerDay * 7
+        } total for a week).`}
         imageUrl="https://images.unsplash.com/photo-1543352634-a1c51d9f1fa7?q=80&w=300"
         actionButton={{
           title: "Select Recipes",
@@ -514,6 +531,9 @@ export default function MealPlanScreen() {
     }
 
     setIsGeneratingOptimizedPlan(true);
+    // Hide any expanded meal slots and suggestions during generation to prevent nested scroll issues
+    setExpandedMeal(null);
+    setShowSuggestions(false);
 
     try {
       // Clear existing meal plan
@@ -526,8 +546,10 @@ export default function MealPlanScreen() {
       const mealsPerDay = preferences.mealsPerDay || 3;
       const totalMealsNeeded = mealsPerDay * 7;
 
-      console.log(`Starting meal planning: Need ${totalMealsNeeded} meals with ${selectedRecipes.length} selected recipes`);
-      
+      console.log(
+        `Starting meal planning: Need ${totalMealsNeeded} meals with ${selectedRecipes.length} selected recipes`
+      );
+
       // Store meals that will be added to the plan
       const mealsToAdd: {
         recipe: ScoredRecipe;
@@ -537,210 +559,259 @@ export default function MealPlanScreen() {
 
       // Track selected ingredients to apply bonus to other recipes
       const selectedIngredients = new Set<string>();
-      
+
       // Track recipes usage (how many times each recipe has been used)
-      const recipeUsage: Record<string, { count: number, lastUsedDay: number }> = {};
-      
+      const recipeUsage: Record<
+        string,
+        { count: number; lastUsedDay: number }
+      > = {};
+
       // Initialize recipeUsage tracking for all selected recipes to make sure we use them all
-      selectedRecipes.forEach(recipe => {
+      selectedRecipes.forEach((recipe) => {
         recipeUsage[recipe.id] = { count: 0, lastUsedDay: -1 };
       });
 
       // Clone the selected recipes array to manipulate scores
       // Combine with suggestedRecipes to get the score information
-      const recipesWithScores = selectedRecipes.map(recipe => {
+      const recipesWithScores = selectedRecipes.map((recipe) => {
         // Try to find this recipe in suggestedRecipes to get its score
-        const scoredVersion = suggestedRecipes.find(r => r.id === recipe.id);
+        const scoredVersion = suggestedRecipes.find((r) => r.id === recipe.id);
         if (scoredVersion) {
           return scoredVersion;
         }
-        
+
         // If not found in suggestedRecipes, calculate a score based on pantry items
         // Calculate expiry-based score as described in help modal
         let baseScore = 0;
         const recipeIngredients = recipe.extendedIngredients
           ? recipe.extendedIngredients
-              .map(ing => ing.name?.toLowerCase() || "")
-              .filter(name => name)
+              .map((ing) => ing.name?.toLowerCase() || "")
+              .filter((name) => name)
           : [];
-        
+
         // Check if recipe ingredients match any pantry items
-        recipeIngredients.forEach(ingredient => {
-          const matchingPantryItems = pantryItems.filter(item => 
+        recipeIngredients.forEach((ingredient) => {
+          const matchingPantryItems = pantryItems.filter((item) =>
             item.name.toLowerCase().includes(ingredient)
           );
-          
+
           // Add score for each matching pantry item (10/days_left)
-          matchingPantryItems.forEach(item => {
+          matchingPantryItems.forEach((item) => {
             if (item.expiryDate) {
               const daysLeft = getDaysUntilExpiry(item.expiryDate);
               baseScore += 10 / Math.max(1, daysLeft);
             }
           });
         });
-        
+
         // Ensure minimum score of 1
         baseScore = Math.max(1, baseScore);
-        
+
         return {
           ...recipe,
           score: baseScore,
           calculatedScore: {
             baseScore: baseScore,
             overlapBonus: 0,
-            totalScore: baseScore
-          }
+            totalScore: baseScore,
+          },
         };
       });
-      
+
       let workingRecipes = [...recipesWithScores] as ScoredRecipe[];
 
       // Sort recipes by score in descending order
       workingRecipes.sort((a, b) => b.score - a.score);
 
       console.log(`Using ${workingRecipes.length} selected recipes`);
-      
+
       // Loop through each day and each meal type to fill the plan
       for (let day = 0; day < 7; day++) {
         // Only loop through the number of meals per day that the user wants
         const mealsForThisDay = Math.min(mealsPerDay, MEAL_TYPES.length);
-        
-        for (let mealTypeIndex = 0; mealTypeIndex < mealsForThisDay; mealTypeIndex++) {
-          if (workingRecipes.length === 0 && Object.keys(recipeUsage).length === 0) {
-            console.log(`No more recipes available at day ${day}, meal ${mealTypeIndex}`);
+
+        for (
+          let mealTypeIndex = 0;
+          mealTypeIndex < mealsForThisDay;
+          mealTypeIndex++
+        ) {
+          if (
+            workingRecipes.length === 0 &&
+            Object.keys(recipeUsage).length === 0
+          ) {
+            console.log(
+              `No more recipes available at day ${day}, meal ${mealTypeIndex}`
+            );
             break;
           }
-          
+
           // Get the meal type for this slot
           const mealType = MEAL_TYPES[mealTypeIndex];
-          
+
           // Find the best recipe considering usage limitations
           // First, try to find recipes that haven't been used yet or haven't been used on consecutive days
-          const availableRecipes = workingRecipes.filter(r => {
+          const availableRecipes = workingRecipes.filter((r) => {
             const usage = recipeUsage[r.id];
             // Allow a recipe if:
             // 1. It hasn't been used too many times (max 3 times per week)
             // 2. It wasn't used the previous day (to avoid repetition on consecutive days)
-            return usage && usage.count < 3 && (usage.lastUsedDay === -1 || day - usage.lastUsedDay > 1);
+            return (
+              usage &&
+              usage.count < 3 &&
+              (usage.lastUsedDay === -1 || day - usage.lastUsedDay > 1)
+            );
           });
 
           // If no recipes meet our ideal criteria, relax the consecutive day restriction
-          const fallbackRecipes = availableRecipes.length > 0 ? 
-            availableRecipes : 
-            workingRecipes.filter(r => recipeUsage[r.id] && recipeUsage[r.id].count < 3);
-          
+          const fallbackRecipes =
+            availableRecipes.length > 0
+              ? availableRecipes
+              : workingRecipes.filter(
+                  (r) => recipeUsage[r.id] && recipeUsage[r.id].count < 3
+                );
+
           // If still no available recipes, reset all recipes for reuse
           if (fallbackRecipes.length === 0) {
-            console.log(`All recipes have been used max times, resetting recipe usage for day ${day}`);
+            console.log(
+              `All recipes have been used max times, resetting recipe usage for day ${day}`
+            );
             // Reset recipe usage for recipes not used in the last 2 days
-            Object.keys(recipeUsage).forEach(id => {
+            Object.keys(recipeUsage).forEach((id) => {
               if (day - recipeUsage[id].lastUsedDay > 2) {
                 recipeUsage[id].count = 0;
               }
             });
             // Recalculate available recipes after reset
-            const resetRecipes = workingRecipes.filter(r => recipeUsage[r.id].count < 3);
+            const resetRecipes = workingRecipes.filter(
+              (r) => recipeUsage[r.id].count < 3
+            );
             if (resetRecipes.length === 0) {
-              console.log(`Still no available recipes after reset, using all recipes`);
+              console.log(
+                `Still no available recipes after reset, using all recipes`
+              );
               // If still no recipes available, use all recipes
-              Object.keys(recipeUsage).forEach(id => {
+              Object.keys(recipeUsage).forEach((id) => {
                 recipeUsage[id].count = 0;
               });
             }
           }
-          
+
           // Get the best recipe from available ones (or all if none are available)
-          const recipesToChooseFrom = fallbackRecipes.length > 0 ? fallbackRecipes : workingRecipes;
-          const topRecipe = recipesToChooseFrom.length > 0 ? recipesToChooseFrom[0] : workingRecipes[0];
-          
+          const recipesToChooseFrom =
+            fallbackRecipes.length > 0 ? fallbackRecipes : workingRecipes;
+          const topRecipe =
+            recipesToChooseFrom.length > 0
+              ? recipesToChooseFrom[0]
+              : workingRecipes[0];
+
           if (!topRecipe) {
-            console.log(`No recipes available for day ${day}, meal ${mealTypeIndex}`);
+            console.log(
+              `No recipes available for day ${day}, meal ${mealTypeIndex}`
+            );
             continue;
           }
-          
+
           // Update recipe usage tracking
           recipeUsage[topRecipe.id].count++;
           recipeUsage[topRecipe.id].lastUsedDay = day;
-          
-          console.log(`Adding ${topRecipe.title} to day ${day} for ${mealType}, usage count: ${recipeUsage[topRecipe.id].count}`);
-          
+
+          console.log(
+            `Adding ${
+              topRecipe.title
+            } to day ${day} for ${mealType}, usage count: ${
+              recipeUsage[topRecipe.id].count
+            }`
+          );
+
           // Store for later addition to the meal plan
           mealsToAdd.push({
             recipe: topRecipe,
             day,
-            mealType
+            mealType,
           });
 
           // Extract ingredients from the selected recipe to boost scores of recipes with overlapping ingredients
           const recipeIngredients = topRecipe.extendedIngredients
             ? topRecipe.extendedIngredients
-                .map(ing => ing.name?.toLowerCase() || "")
-                .filter(name => name)
+                .map((ing) => ing.name?.toLowerCase() || "")
+                .filter((name) => name)
             : [];
 
           // Add these ingredients to our tracking set
-          recipeIngredients.forEach(ing => selectedIngredients.add(ing));
+          recipeIngredients.forEach((ing) => selectedIngredients.add(ing));
 
           // Adjust scores for remaining recipes based on ingredient overlap
-          workingRecipes = workingRecipes.map(recipe => {
-            // If this recipe has been used too many times, reduce its score dramatically
-            if (recipeUsage[recipe.id].count >= 3) {
+          workingRecipes = workingRecipes
+            .map((recipe) => {
+              // If this recipe has been used too many times, reduce its score dramatically
+              if (recipeUsage[recipe.id].count >= 3) {
+                return {
+                  ...recipe,
+                  score: 0,
+                };
+              }
+
+              // Reduce score slightly if used recently
+              let recencyPenalty = 0;
+              if (recipeUsage[recipe.id].lastUsedDay !== -1) {
+                const daysSinceLastUse =
+                  day - recipeUsage[recipe.id].lastUsedDay;
+                if (daysSinceLastUse <= 1) {
+                  recencyPenalty = 10; // Big penalty for consecutive days
+                } else if (daysSinceLastUse <= 3) {
+                  recencyPenalty = 5; // Smaller penalty for recent use
+                }
+              }
+
+              const recipeIngs = recipe.extendedIngredients
+                ? recipe.extendedIngredients
+                    .map((ing) => ing.name?.toLowerCase() || "")
+                    .filter((name) => name)
+                : [];
+
+              // Count ingredients that overlap with our selection
+              const overlapCount = recipeIngs.filter((ing) =>
+                selectedIngredients.has(ing)
+              ).length;
+
+              // Apply a bonus to the score for ingredient overlap
+              const overlapBonus = overlapCount * 3; // 3 points per overlapping ingredient
+
+              // Store the original and new scores for display
+              const baseScore = recipe.score || 0;
+              const calculatedScore = {
+                baseScore: baseScore,
+                overlapBonus: overlapBonus,
+                totalScore: Math.max(
+                  0,
+                  baseScore + overlapBonus - recencyPenalty
+                ),
+              };
+
               return {
                 ...recipe,
-                score: 0
+                score: calculatedScore.totalScore,
+                calculatedScore,
               };
-            }
-            
-            // Reduce score slightly if used recently
-            let recencyPenalty = 0;
-            if (recipeUsage[recipe.id].lastUsedDay !== -1) {
-              const daysSinceLastUse = day - recipeUsage[recipe.id].lastUsedDay;
-              if (daysSinceLastUse <= 1) {
-                recencyPenalty = 10; // Big penalty for consecutive days
-              } else if (daysSinceLastUse <= 3) {
-                recencyPenalty = 5; // Smaller penalty for recent use
-              }
-            }
-            
-            const recipeIngs = recipe.extendedIngredients
-              ? recipe.extendedIngredients
-                  .map(ing => ing.name?.toLowerCase() || "")
-                  .filter(name => name)
-              : [];
-            
-            // Count ingredients that overlap with our selection
-            const overlapCount = recipeIngs.filter(ing => 
-              selectedIngredients.has(ing)
-            ).length;
-            
-            // Apply a bonus to the score for ingredient overlap
-            const overlapBonus = overlapCount * 3; // 3 points per overlapping ingredient
-            
-            // Store the original and new scores for display
-            const baseScore = recipe.score || 0;
-            const calculatedScore = {
-              baseScore: baseScore,
-              overlapBonus: overlapBonus,
-              totalScore: Math.max(0, baseScore + overlapBonus - recencyPenalty)
-            };
-            
-            return {
-              ...recipe,
-              score: calculatedScore.totalScore,
-              calculatedScore
-            };
-          }).sort((a, b) => b.score - a.score); // Resort by new scores
+            })
+            .sort((a, b) => b.score - a.score); // Resort by new scores
         }
       }
 
       // Now actually add all the meals to the plan
       mealsToAdd.forEach(({ recipe, day, mealType }) => {
         // We need to cast mealType to ensure TypeScript recognizes it as a valid meal type
-        addToMealPlan(recipe, day, mealType as "breakfast" | "lunch" | "dinner");
+        addToMealPlan(
+          recipe,
+          day,
+          mealType as "breakfast" | "lunch" | "dinner"
+        );
       });
 
-      console.log(`Optimized meal plan created with ${mealsToAdd.length} meals out of ${totalMealsNeeded} needed`);
-      
+      console.log(
+        `Optimized meal plan created with ${mealsToAdd.length} meals out of ${totalMealsNeeded} needed`
+      );
+
       // If we didn't create a full week, let the user know
       if (mealsToAdd.length < totalMealsNeeded) {
         setTimeout(() => {
@@ -783,71 +854,83 @@ export default function MealPlanScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>How Recipe Scoring Works</Text>
 
-            <ScrollView style={styles.modalScrollView}>
-              <Text style={styles.modalSubtitle}>
-                Our Goal: Minimize Food Waste
-              </Text>
-              <Text style={styles.modalText}>
-                The meal planner uses a special algorithm to create a meal plan
-                that helps reduce food waste by prioritizing ingredients that
-                will expire soon.
-              </Text>
+            <View style={styles.modalScrollViewContainer}>
+              <ScrollView style={styles.modalScrollView}>
+                <Text style={styles.modalSubtitle}>
+                  Our Goal: Minimize Food Waste
+                </Text>
+                <Text style={styles.modalText}>
+                  The meal planner uses a special algorithm to create a meal
+                  plan that helps reduce food waste by prioritizing ingredients
+                  that will expire soon.
+                </Text>
 
-              <Text style={styles.modalSubtitle}>Recipe Scoring Formula:</Text>
-              <Text style={styles.formulaText}>
-                Base Score = Sum(10 / days_left) for each pantry item
-              </Text>
-              <Text style={styles.modalText}>
-                Recipes using ingredients that will expire sooner get higher
-                scores. For example, an ingredient expiring in 2 days adds 5
-                points, while one expiring in 10 days adds only 1 point.
-              </Text>
+                <Text style={styles.modalSubtitle}>
+                  Recipe Scoring Formula:
+                </Text>
+                <Text style={styles.formulaText}>
+                  Base Score = Sum(10 / days_left) for each pantry item
+                </Text>
+                <Text style={styles.modalText}>
+                  Recipes using ingredients that will expire sooner get higher
+                  scores. For example, an ingredient expiring in 2 days adds 5
+                  points, while one expiring in 10 days adds only 1 point.
+                </Text>
 
-              <Text style={styles.modalSubtitle}>
-                Ingredient Overlap Bonus:
-              </Text>
-              <Text style={styles.formulaText}>
-                +3 points for each shared ingredient with other selected meals
-              </Text>
-              <Text style={styles.modalText}>
-                As recipes are selected, other recipes that use the same
-                ingredients get bonus points. This encourages efficient use of
-                ingredients across multiple meals.
-              </Text>
+                <Text style={styles.modalSubtitle}>
+                  Ingredient Overlap Bonus:
+                </Text>
+                <Text style={styles.formulaText}>
+                  +3 points for each shared ingredient with other selected meals
+                </Text>
+                <Text style={styles.modalText}>
+                  As recipes are selected, other recipes that use the same
+                  ingredients get bonus points. This encourages efficient use of
+                  ingredients across multiple meals.
+                </Text>
 
-              <Text style={styles.modalSubtitle}>Selection Process:</Text>
-              <Text style={styles.modalText}>
-                1. Calculate scores for all recipes
-              </Text>
-              <Text style={styles.modalText}>
-                2. Select the recipe with highest score
-              </Text>
-              <Text style={styles.modalText}>
-                3. Add +3 point bonus to remaining recipes for each shared
-                ingredient
-              </Text>
-              <Text style={styles.modalText}>
-                4. Repeat until we have filled the meal plan
-              </Text>
+                <Text style={styles.modalSubtitle}>Selection Process:</Text>
+                <Text style={styles.modalText}>
+                  1. Calculate scores for all recipes
+                </Text>
+                <Text style={styles.modalText}>
+                  2. Select the recipe with highest score
+                </Text>
+                <Text style={styles.modalText}>
+                  3. Add +3 point bonus to remaining recipes for each shared
+                  ingredient
+                </Text>
+                <Text style={styles.modalText}>
+                  4. Repeat until we have filled the meal plan
+                </Text>
 
-              <Text style={styles.modalSubtitle}>Recipe Repetition:</Text>
-              <Text style={styles.modalText}>
-                When you have fewer recipes than needed for a full week, the app will intelligently repeat recipes
-                while trying to maintain variety. Recipes can be used up to 3 times per week, but not on consecutive days
-                when possible. Repeated meals are marked with a small badge showing how many times they appear in your plan.
-              </Text>
+                <Text style={styles.modalSubtitle}>Recipe Repetition:</Text>
+                <Text style={styles.modalText}>
+                  When you have fewer recipes than needed for a full week, the
+                  app will intelligently repeat recipes while trying to maintain
+                  variety. Recipes can be used up to 3 times per week, but not
+                  on consecutive days when possible. Repeated meals are marked
+                  with a small badge showing how many times they appear in your
+                  plan.
+                </Text>
 
-              <Text style={styles.modalSubtitle}>Score Breakdown:</Text>
-              <Text style={styles.modalText}>
-                Each recipe shows its score as (Base + Overlap Bonus)
-              </Text>
+                <Text style={styles.modalSubtitle}>Score Breakdown:</Text>
+                <Text style={styles.modalText}>
+                  Each recipe shows its score as (Base + Overlap Bonus)
+                </Text>
 
-              <Text style={styles.modalSubtitle}>Meals Per Day:</Text>
-              <Text style={styles.modalText}>
-                The meal planner respects your preference for how many meals you want per day. This is configured in your Settings tab.
-                Currently, you have {mealsPerDay} {mealsPerDay === 1 ? 'meal' : 'meals'} per day configured. This means your meal plan will include only the first {mealsPerDay} meal types: {MEAL_TYPES.slice(0, mealsPerDay).join(', ')}.
-              </Text>
-            </ScrollView>
+                <Text style={styles.modalSubtitle}>Meals Per Day:</Text>
+                <Text style={styles.modalText}>
+                  The meal planner respects your preference for how many meals
+                  you want per day. This is configured in your Settings tab.
+                  Currently, you have {mealsPerDay}{" "}
+                  {mealsPerDay === 1 ? "meal" : "meals"} per day configured.
+                  This means your meal plan will include only the first{" "}
+                  {mealsPerDay} meal types:{" "}
+                  {MEAL_TYPES.slice(0, mealsPerDay).join(", ")}.
+                </Text>
+              </ScrollView>
+            </View>
 
             <TouchableOpacity
               style={styles.closeButton}
@@ -875,7 +958,7 @@ export default function MealPlanScreen() {
             disabled={isLoading || selectedRecipes.length === 0}
             onLongPress={() => {
               Alert.alert(
-                "Refresh Suggestions", 
+                "Refresh Suggestions",
                 "This refreshes the suggested recipes based on your pantry items and preferences. It does not automatically arrange them into a meal plan."
               );
             }}
@@ -917,10 +1000,10 @@ export default function MealPlanScreen() {
                     "This will create an optimal meal plan for the week based on your pantry items, with a focus on ingredients that will expire soon. Any existing plan will be replaced.",
                     [
                       { text: "Cancel", style: "cancel" },
-                      { 
-                        text: "Generate Plan", 
-                        onPress: generateOptimizedMealPlan 
-                      }
+                      {
+                        text: "Generate Plan",
+                        onPress: generateOptimizedMealPlan,
+                      },
                     ]
                   );
                 }}
@@ -928,26 +1011,31 @@ export default function MealPlanScreen() {
               >
                 <Brain size={16} color="#FFFFFF" />
                 <Text style={styles.optimizeButtonText}>
-                  {isGeneratingOptimizedPlan ? "Optimizing..." : "Auto-Generate Smart Meal Plan"}
+                  {isGeneratingOptimizedPlan
+                    ? "Optimizing..."
+                    : "Auto-Generate Smart Meal Plan"}
                 </Text>
               </TouchableOpacity>
-              
+
               {mealPlan.length > 0 && (
                 <TouchableOpacity
-                  style={[styles.optimizeButton, { marginTop: 8, backgroundColor: Colors.primary }]}
+                  style={[
+                    styles.optimizeButton,
+                    { marginTop: 8, backgroundColor: Colors.primary },
+                  ]}
                   onPress={() => {
                     Alert.alert(
                       "Regenerate Meal Plan",
                       "This will clear your current meal plan and create a new one. Continue?",
                       [
                         { text: "Cancel", style: "cancel" },
-                        { 
-                          text: "Regenerate", 
+                        {
+                          text: "Regenerate",
                           onPress: () => {
                             clearMealPlan();
                             generateOptimizedMealPlan();
-                          }
-                        }
+                          },
+                        },
                       ]
                     );
                   }}
@@ -960,7 +1048,7 @@ export default function MealPlanScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            
+
             <View style={styles.daySelector}>
               <TouchableOpacity
                 style={styles.dayNavButton}
@@ -972,16 +1060,14 @@ export default function MealPlanScreen() {
                   color={activeDay === 0 ? TEXT_DISABLED : Colors.text}
                 />
               </TouchableOpacity>
-              
+
               <View>
-                <Text style={styles.dayTitle}>
-                  {DAYS_OF_WEEK[activeDay]}
-                </Text>
+                <Text style={styles.dayTitle}>{DAYS_OF_WEEK[activeDay]}</Text>
                 <Text style={styles.mealCountText}>
-                  {mealsPerDay} {mealsPerDay === 1 ? 'meal' : 'meals'}/day
+                  {mealsPerDay} {mealsPerDay === 1 ? "meal" : "meals"}/day
                 </Text>
               </View>
-              
+
               <TouchableOpacity
                 style={styles.dayNavButton}
                 onPress={() => navigateToDay("next")}
@@ -993,16 +1079,17 @@ export default function MealPlanScreen() {
                 />
               </TouchableOpacity>
             </View>
-            
-            <ScrollView 
+
+            <ScrollView
               style={styles.scrollView}
               contentContainerStyle={[
                 styles.scrollContent,
-                { paddingBottom: bottomPadding }
+                { paddingBottom: bottomPadding },
               ]}
+              nestedScrollEnabled={true}
             >
               {MEAL_TYPES.slice(0, mealsPerDay).map((mealType) => (
-                <React.Fragment key={mealType}>
+                <React.Fragment key={`meal-type-${mealType}`}>
                   {renderMealSlot(mealType as "breakfast" | "lunch" | "dinner")}
                 </React.Fragment>
               ))}
@@ -1012,7 +1099,7 @@ export default function MealPlanScreen() {
           renderEmptyState()
         )}
       </View>
-      
+
       {/* Render the help modal */}
       {renderHelpModal()}
     </View>
@@ -1102,34 +1189,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   mealSlotHeader: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.background + '80',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: Colors.background + "80",
   },
   mealTypeText: {
     fontSize: 16,
     fontWeight: "700",
     color: Colors.text,
-    textTransform: 'capitalize',
+    textTransform: "capitalize",
   },
   mealCard: {
-    width: '100%',
+    width: "100%",
     backgroundColor: Colors.background,
     marginBottom: 1,
   },
   mealCardInner: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 12,
   },
   mealImageContainer: {
-    position: 'relative',
+    position: "relative",
   },
   mealImage: {
     width: 60,
@@ -1140,17 +1227,17 @@ const styles = StyleSheet.create({
   mealInfo: {
     flex: 1,
     marginLeft: 12,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   mealTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
     marginBottom: 4,
   },
   mealMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   mealMetaText: {
     fontSize: 12,
@@ -1161,20 +1248,20 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.danger + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: Colors.danger + "20",
+    alignItems: "center",
+    justifyContent: "center",
     marginLeft: 8,
   },
   removeMealText: {
     fontSize: 12,
     color: Colors.danger,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   emptyMealSlot: {
     height: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: Colors.background,
     padding: 16,
   },
@@ -1189,9 +1276,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   optimizeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: Colors.success,
     padding: 12,
     borderRadius: 8,
@@ -1209,31 +1296,35 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   modalContent: {
-    width: '90%',
+    width: "90%",
     backgroundColor: Colors.card,
     borderRadius: 12,
     padding: 20,
-    maxHeight: '80%',
+    maxHeight: "80%",
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginBottom: 16,
     color: Colors.text,
-    textAlign: 'center',
+    textAlign: "center",
+  },
+  modalScrollViewContainer: {
+    flex: 1,
+    maxHeight: "70%",
   },
   modalScrollView: {
-    maxHeight: '80%',
+    flex: 1,
   },
   modalSubtitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginTop: 16,
     marginBottom: 8,
     color: Colors.text,
@@ -1246,10 +1337,10 @@ const styles = StyleSheet.create({
   },
   formulaText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.primary,
     marginBottom: 8,
-    backgroundColor: Colors.border + '40',
+    backgroundColor: Colors.border + "40",
     padding: 8,
     borderRadius: 4,
   },
@@ -1257,20 +1348,20 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     padding: 12,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 16,
   },
   closeButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
   scoreRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   scoreText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.warning,
     marginLeft: 4,
   },
@@ -1280,26 +1371,26 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   repeatBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: -5,
     right: -5,
     backgroundColor: Colors.primary,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 4,
   },
   repeatBadgeText: {
-    color: 'white',
+    color: "white",
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   mealCountText: {
     fontSize: 12,
     color: Colors.textLight,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 2,
   },
   expandButton: {
@@ -1313,7 +1404,7 @@ const styles = StyleSheet.create({
   },
   suggestionsTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.text,
     marginBottom: 8,
   },
@@ -1321,11 +1412,11 @@ const styles = StyleSheet.create({
     maxHeight: 320,
   },
   suggestionItem: {
-    flexDirection: 'row',
+    flexDirection: "row",
     padding: 8,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border + '40',
-    alignItems: 'center',
+    borderBottomColor: Colors.border + "40",
+    alignItems: "center",
   },
   suggestionImage: {
     width: 50,
@@ -1339,23 +1430,23 @@ const styles = StyleSheet.create({
   },
   suggestionTitle: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: "500",
     color: Colors.text,
   },
   suggestionMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 4,
   },
   suggestionScore: {
     fontSize: 12,
     color: Colors.warning,
     marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   suggestionsLoader: {
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
     backgroundColor: Colors.background,
   },
   suggestionsLoaderText: {
@@ -1365,11 +1456,11 @@ const styles = StyleSheet.create({
   },
   suggestionsEmpty: {
     padding: 20,
-    alignItems: 'center',
+    alignItems: "center",
     backgroundColor: Colors.background,
   },
   suggestionsEmptyText: {
     fontSize: 14,
     color: Colors.textLight,
   },
-}); 
+});
