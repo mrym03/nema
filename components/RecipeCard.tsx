@@ -1,9 +1,21 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  TouchableOpacity,
+} from "react-native";
 import { Image } from "expo-image";
 import { Recipe } from "@/types";
 import Colors from "@/constants/colors";
-import { Clock, Users, ThumbsUp } from "lucide-react-native";
+import {
+  Clock,
+  Users,
+  ThumbsUp,
+  ShoppingCart,
+  Check,
+} from "lucide-react-native";
 import CardContainer from "@/components/CardContainer";
 
 // Conditional imports to handle potential errors
@@ -25,9 +37,16 @@ try {
 interface RecipeCardProps {
   recipe: Recipe;
   onPress: (recipe: Recipe) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (recipe: Recipe) => void;
 }
 
-const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onPress }) => {
+const RecipeCard: React.FC<RecipeCardProps> = ({
+  recipe,
+  onPress,
+  isSelected = false,
+  onToggleSelect,
+}) => {
   // Determine if we should use LinearGradient or fallback to a regular view
   const shouldUseGradient = LinearGradient !== View;
 
@@ -58,6 +77,13 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onPress }) => {
         ],
       };
 
+  const handleToggleSelect = (e: any) => {
+    e.stopPropagation();
+    if (onToggleSelect) {
+      onToggleSelect(recipe);
+    }
+  };
+
   return (
     <CardContainer style={styles.container} elevation="medium">
       <Pressable
@@ -82,6 +108,23 @@ const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onPress }) => {
               {recipe.title}
             </Text>
           </View>
+
+          {/* Selection button in the top-right corner */}
+          {onToggleSelect && (
+            <TouchableOpacity
+              style={[
+                styles.selectButton,
+                isSelected ? styles.selectedButton : {},
+              ]}
+              onPress={handleToggleSelect}
+            >
+              {isSelected ? (
+                <Check size={18} color="#FFF" />
+              ) : (
+                <ShoppingCart size={18} color="#FFF" />
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.content}>
@@ -156,6 +199,25 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0, 0, 0, 0.75)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  selectButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  selectedButton: {
+    backgroundColor: Colors.success,
   },
   content: {
     padding: 16,

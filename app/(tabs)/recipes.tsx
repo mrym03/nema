@@ -8,6 +8,7 @@ import {
   Pressable,
   Platform,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,7 +20,13 @@ import { Recipe } from "@/types";
 import Colors from "@/constants/colors";
 import RecipeCard from "@/components/RecipeCard";
 import EmptyState from "@/components/EmptyState";
-import { Search, RefreshCw, AlertTriangle } from "lucide-react-native";
+import {
+  Search,
+  RefreshCw,
+  AlertTriangle,
+  ShoppingCart,
+  List,
+} from "lucide-react-native";
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -47,7 +54,15 @@ try {
 export default function RecipesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { recipes, isLoading, error, fetchRecipes } = useRecipeStore();
+  const {
+    recipes,
+    isLoading,
+    error,
+    fetchRecipes,
+    toggleRecipeSelection,
+    isRecipeSelected,
+    selectedRecipes,
+  } = useRecipeStore();
   const { items } = usePantryStore();
   const { preferences } = usePreferences();
   const [refreshing, setRefreshing] = useState(false);
@@ -125,11 +140,20 @@ export default function RecipesScreen() {
     });
   };
 
+  const handleViewShoppingList = () => {
+    router.push("/shopping-list");
+  };
+
   const renderItem = useCallback(
     ({ item }: { item: Recipe }) => (
-      <RecipeCard recipe={item} onPress={() => handleRecipePress(item.id)} />
+      <RecipeCard
+        recipe={item}
+        onPress={() => handleRecipePress(item.id)}
+        isSelected={isRecipeSelected(item.id)}
+        onToggleSelect={toggleRecipeSelection}
+      />
     ),
-    []
+    [isRecipeSelected, toggleRecipeSelection]
   );
 
   // Check if required components are available
@@ -234,6 +258,18 @@ export default function RecipesScreen() {
       </HeaderComponent>
 
       <View style={styles.contentContainer}>
+        {selectedRecipes.length > 0 && (
+          <TouchableOpacity
+            style={styles.shoppingListButton}
+            onPress={handleViewShoppingList}
+          >
+            <ShoppingCart size={20} color="#FFFFFF" />
+            <Text style={styles.shoppingListButtonText}>
+              View Shopping List ({selectedRecipes.length})
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <FlatList
           data={recipes}
           renderItem={renderItem}
@@ -337,5 +373,26 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "500",
+  },
+  shoppingListButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.success,
+    padding: 12,
+    margin: 16,
+    marginBottom: 0,
+    borderRadius: 8,
+    shadowColor: Colors.shadowDark || "rgba(0,0,0,0.2)",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  shoppingListButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginLeft: 8,
   },
 });
