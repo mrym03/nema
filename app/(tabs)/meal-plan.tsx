@@ -294,15 +294,23 @@ export default function MealPlanScreen() {
     );
   };
 
-  // Render an empty meal slot
+  // Update the renderEmptyMealSlot function to properly show suggestions
   const renderEmptyMealSlot = (
     mealType: "breakfast" | "lunch" | "dinner"
   ) => (
     <TouchableOpacity
       style={styles.emptyMealSlot}
       onPress={() => {
-        toggleMealExpansion(mealType);
-        toggleSuggestions();
+        // First set the active meal type
+        setActiveMealType(mealType);
+        // Then toggle the expansion and suggestions states
+        setExpandedMeal(mealType);
+        setShowSuggestions(true);
+        
+        // If we don't have suggested recipes yet, generate them
+        if (suggestedRecipes.length === 0 && !isLoading) {
+          handleGenerateMealPlan();
+        }
       }}
     >
       <Plus size={24} color={Colors.textLight} />
@@ -310,6 +318,65 @@ export default function MealPlanScreen() {
     </TouchableOpacity>
   );
 
+  // Add a renderSuggestedRecipes function to show recipe options
+  const renderSuggestedRecipes = () => {
+    if (isLoading) {
+      return (
+        <View style={styles.suggestionsLoader}>
+          <ActivityIndicator size="small" color={Colors.primary} />
+          <Text style={styles.suggestionsLoaderText}>Loading suggestions...</Text>
+        </View>
+      );
+    }
+
+    if (suggestedRecipes.length === 0) {
+      return (
+        <View style={styles.suggestionsEmpty}>
+          <Text style={styles.suggestionsEmptyText}>No recipe suggestions available</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.suggestionsContainer}>
+        <Text style={styles.suggestionsTitle}>Select a recipe:</Text>
+        <FlatList
+          data={suggestedRecipes}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleAddToMealPlan(item as ScoredRecipe, activeDay, activeMealType as any)}
+            >
+              <Image
+                source={item.imageUrl}
+                style={styles.suggestionImage}
+                contentFit="cover"
+              />
+              <View style={styles.suggestionInfo}>
+                <Text style={styles.suggestionTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                {item.score > 0 && (
+                  <View style={styles.suggestionMeta}>
+                    <Star size={14} color={Colors.warning} />
+                    <Text style={styles.suggestionScore}>
+                      {item.score.toFixed(1)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+          style={styles.suggestionsList}
+          maxToRenderPerBatch={5}
+          initialNumToRender={5}
+        />
+      </View>
+    );
+  };
+
+  // Update the renderMealSlot function to show suggestions when expanded
   const renderMealSlot = (mealType: "breakfast" | "lunch" | "dinner") => {
     const mealsForSlot = mealPlan.filter(
       (meal) => meal.dayIndex === activeDay && meal.mealType === mealType
@@ -329,6 +396,8 @@ export default function MealPlanScreen() {
       }
     };
 
+    const isExpanded = expandedMeal === mealType;
+
     return (
       <View style={styles.mealSlot}>
         <View style={styles.mealSlotHeader}>
@@ -338,6 +407,25 @@ export default function MealPlanScreen() {
               {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
             </Text>
           </View>
+          
+          {mealsForSlot.length === 0 && (
+            <TouchableOpacity
+              onPress={() => {
+                setActiveMealType(mealType);
+                setExpandedMeal(isExpanded ? null : mealType);
+                setShowSuggestions(!isExpanded);
+              }}
+              style={styles.expandButton}
+            >
+              <ChevronDown 
+                size={18} 
+                color={Colors.textLight}
+                style={{ 
+                  transform: [{ rotate: isExpanded ? '180deg' : '0deg' }]
+                }}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         {mealsForSlot.length > 0 ? (
@@ -350,6 +438,11 @@ export default function MealPlanScreen() {
           />
         ) : (
           renderEmptyMealSlot(mealType)
+        )}
+        
+        {/* Show suggestions when this meal slot is expanded */}
+        {isExpanded && showSuggestions && (
+          renderSuggestedRecipes()
         )}
       </View>
     );
@@ -1208,5 +1301,75 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     marginTop: 2,
+  },
+  expandButton: {
+    padding: 4,
+  },
+  suggestionsContainer: {
+    backgroundColor: Colors.background,
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  suggestionsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  suggestionsList: {
+    maxHeight: 320,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '40',
+    alignItems: 'center',
+  },
+  suggestionImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    backgroundColor: Colors.border,
+  },
+  suggestionInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  suggestionTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.text,
+  },
+  suggestionMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  suggestionScore: {
+    fontSize: 12,
+    color: Colors.warning,
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  suggestionsLoader: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  suggestionsLoaderText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.textLight,
+  },
+  suggestionsEmpty: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  suggestionsEmptyText: {
+    fontSize: 14,
+    color: Colors.textLight,
   },
 }); 
