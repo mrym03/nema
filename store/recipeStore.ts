@@ -1,15 +1,21 @@
 import { create } from "zustand";
 import { Recipe } from "@/types";
 import { mockRecipes } from "@/mocks/recipes";
-import { fetchRecipesByIngredients } from "@/utils/api";
+import { fetchRecipesByIngredients, getRecipeDetails } from "@/utils/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface RecipeState {
   recipes: Recipe[];
   isLoading: boolean;
   error: string | null;
   quotaExceeded: boolean;
-  fetchRecipes: (ingredients: string[]) => Promise<void>;
-  getRecipeById: (id: string) => Recipe | undefined;
+  fetchRecipes: (
+    ingredients: string[],
+    dietaryPreferences?: string[],
+    cuisinePreferences?: string[]
+  ) => Promise<void>;
+  getRecipeById: (id: string) => Promise<Recipe | undefined>;
+  cachedRecipeDetails: Record<string, Recipe>;
 }
 
 export const useRecipeStore = create<RecipeState>((set, get) => ({
@@ -17,25 +23,34 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
   isLoading: false,
   error: null,
   quotaExceeded: false,
+  cachedRecipeDetails: {},
 
-  fetchRecipes: async (ingredients) => {
+  fetchRecipes: async (
+    ingredients,
+    dietaryPreferences = [],
+    cuisinePreferences = []
+  ) => {
     set({ isLoading: true, error: null, quotaExceeded: false });
 
     try {
-      // Use the real Spoonacular API
-      const recipesData = await fetchRecipesByIngredients(ingredients);
+      // Use the real Spoonacular API with user preferences
+      const recipesData = await fetchRecipesByIngredients(
+        ingredients,
+        dietaryPreferences,
+        cuisinePreferences
+      );
 
       // Transform the data to match our Recipe type if needed
       const formattedRecipes: Recipe[] = recipesData.map((item: any) => ({
         id: item.id.toString(),
         title: item.title,
-        imageUrl: item.image,
+        imageUrl: item.imageUrl || item.image, // Handle both formats
         readyInMinutes: item.readyInMinutes || 30,
         servings: item.servings || 4,
         sourceUrl: item.sourceUrl || "",
         summary: item.summary || "",
-        usedIngredientCount: item.usedIngredientCount,
-        missedIngredientCount: item.missedIngredientCount,
+        usedIngredientCount: item.usedIngredientCount || 0,
+        missedIngredientCount: item.missedIngredientCount || 0,
         likes: item.likes || 0,
       }));
 
@@ -63,7 +78,45 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
     }
   },
 
-  getRecipeById: (id) => {
-    return get().recipes.find((recipe) => recipe.id === id);
+  getRecipeById: async (id) => {
+    // First check if we already have the recipe in state
+    const recipeFromState = get().recipes.find((recipe) => recipe.id === id);
+
+    // Also check if we have it in our detailed cache
+    const cachedDetails = get().cachedRecipeDetails[id];
+
+    if (cachedDetails) {
+      return cachedDetails;
+    }
+
+    if (recipeFromState) {
+      try {
+        // Try to get more detailed information
+        const detailedRecipe = await getRecipeDetails(id);
+
+        // Merge with what we know about used/missed ingredients
+        const enhancedRecipe = {
+          ...detailedRecipe,
+          usedIngredientCount: recipeFromState.usedIngredientCount,
+          missedIngredientCount: recipeFromState.missedIngredientCount,
+        };
+
+        // Cache the detailed recipe
+        set((state) => ({
+          cachedRecipeDetails: {
+            ...state.cachedRecipeDetails,
+            [id]: enhancedRecipe,
+          },
+        }));
+
+        return enhancedRecipe;
+      } catch (error) {
+        console.error("Error fetching detailed recipe:", error);
+        // If we can't get details, return what we have
+        return recipeFromState;
+      }
+    }
+
+    return recipeFromState;
   },
 }));

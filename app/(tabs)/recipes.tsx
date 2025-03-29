@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useRecipeStore } from "@/store/recipeStore";
 import { usePantryStore } from "@/store/pantryStore";
+import { usePreferences } from "@/utils/PreferencesContext";
 import { Recipe } from "@/types";
 import Colors from "@/constants/colors";
 import RecipeCard from "@/components/RecipeCard";
@@ -24,6 +25,7 @@ export default function RecipesScreen() {
   const { recipes, isLoading, error, quotaExceeded, fetchRecipes } =
     useRecipeStore();
   const { items } = usePantryStore();
+  const { preferences } = usePreferences();
   const [refreshing, setRefreshing] = useState(false);
 
   // Function to extract ingredient names from pantry items
@@ -34,13 +36,34 @@ export default function RecipesScreen() {
   // Fetch recipes when component mounts or pantry items change
   useEffect(() => {
     fetchRecipesFromPantry();
-  }, [items]);
+  }, [items, preferences]);
 
-  // Function to fetch recipes based on pantry ingredients
+  // Function to fetch recipes based on pantry ingredients and user preferences
   const fetchRecipesFromPantry = async () => {
     const ingredientNames = getIngredientNames();
     console.log("Fetching recipes for ingredients:", ingredientNames);
-    await fetchRecipes(ingredientNames);
+
+    // Convert dietary preferences to Spoonacular format
+    const dietaryPrefs = preferences.dietaryPreferences.map((pref) => {
+      // Handle special cases for Spoonacular API
+      if (pref === "glutenFree") return "gluten free";
+      if (pref === "dairyFree") return "dairy free";
+      if (pref === "lowCarb") return "low carb";
+      return pref;
+    });
+
+    // Convert cuisine preferences
+    const cuisinePrefs = preferences.cuisinePreferences;
+
+    // Log what we're using for filtering
+    if (dietaryPrefs.length > 0) {
+      console.log("Applying dietary preferences:", dietaryPrefs);
+    }
+    if (cuisinePrefs.length > 0) {
+      console.log("Applying cuisine preferences:", cuisinePrefs);
+    }
+
+    await fetchRecipes(ingredientNames, dietaryPrefs, cuisinePrefs);
   };
 
   // Handle pull-to-refresh

@@ -1,86 +1,149 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { Image } from 'expo-image';
-import { useRecipeStore } from '@/store/recipeStore';
-import Colors from '@/constants/colors';
-import { Clock, Users, ThumbsUp, ExternalLink } from 'lucide-react-native';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ScrollView,
+  Linking,
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
+import { Image } from "expo-image";
+import { useRecipeStore } from "@/store/recipeStore";
+import Colors from "@/constants/colors";
+import { Clock, Users, ThumbsUp, ExternalLink } from "lucide-react-native";
+import * as WebBrowser from "expo-web-browser";
+
+// HTML rendering component that removes HTML tags for plain display
+const HTMLText = ({ html }: { html: string }) => {
+  if (!html) return null;
+
+  // Simple HTML tag removal for plain text display
+  const plainText = html.replace(/<\/?[^>]+(>|$)/g, "");
+
+  return <Text style={styles.htmlText}>{plainText}</Text>;
+};
 
 export default function RecipeDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getRecipeById } = useRecipeStore();
-  
-  const recipe = getRecipeById(id);
-  
-  if (!recipe) {
+  const [recipe, setRecipe] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadRecipeDetails = async () => {
+      try {
+        setLoading(true);
+        const recipeData = await getRecipeById(id);
+        setRecipe(recipeData);
+        setLoading(false);
+      } catch (err) {
+        console.error("Error loading recipe details:", err);
+        setError("Couldn't load recipe details");
+        setLoading(false);
+      }
+    };
+
+    loadRecipeDetails();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading recipe details...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !recipe) {
     return (
       <View style={styles.notFound}>
-        <Text style={styles.notFoundText}>Recipe not found</Text>
-        <Pressable 
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <Text style={styles.notFoundText}>{error || "Recipe not found"}</Text>
+        <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backButtonText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
-  
-  const handleOpenRecipe = () => {
-    Linking.openURL(recipe.sourceUrl);
+
+  const handleOpenRecipe = async () => {
+    if (!recipe.sourceUrl) {
+      return;
+    }
+
+    try {
+      await WebBrowser.openBrowserAsync(recipe.sourceUrl);
+    } catch (error) {
+      console.error("Error opening browser:", error);
+      // Fallback to basic linking
+      Linking.openURL(recipe.sourceUrl);
+    }
   };
-  
+
   return (
     <>
       <Stack.Screen options={{ title: recipe.title }} />
-      
-      <SafeAreaView style={styles.container} edges={['bottom']}>
+
+      <SafeAreaView style={styles.container} edges={["bottom"]}>
         <ScrollView>
-          <Image
-            source={recipe.imageUrl}
-            style={styles.image}
-            contentFit="cover"
-          />
-          
+          {recipe.imageUrl ? (
+            <Image
+              source={{ uri: recipe.imageUrl }}
+              style={styles.image}
+              contentFit="cover"
+              transition={200}
+            />
+          ) : (
+            <View style={[styles.image, styles.placeholderImage]}>
+              <Text style={styles.placeholderText}>No image available</Text>
+            </View>
+          )}
+
           <View style={styles.content}>
             <Text style={styles.title}>{recipe.title}</Text>
-            
+
             <View style={styles.metaContainer}>
               <View style={styles.metaItem}>
                 <Clock size={18} color={Colors.textLight} />
                 <Text style={styles.metaText}>{recipe.readyInMinutes} min</Text>
               </View>
-              
+
               <View style={styles.metaItem}>
                 <Users size={18} color={Colors.textLight} />
                 <Text style={styles.metaText}>{recipe.servings} servings</Text>
               </View>
-              
+
               <View style={styles.metaItem}>
                 <ThumbsUp size={18} color={Colors.textLight} />
                 <Text style={styles.metaText}>{recipe.likes}</Text>
               </View>
             </View>
-            
+
             <View style={styles.ingredientsContainer}>
               <Text style={styles.sectionTitle}>Ingredients</Text>
               <Text style={styles.ingredientsText}>
-                This recipe uses {recipe.usedIngredientCount} ingredients from your pantry
-                {recipe.missedIngredientCount > 0 && ` and requires ${recipe.missedIngredientCount} additional ingredients`}.
+                This recipe uses {recipe.usedIngredientCount} ingredients from
+                your pantry
+                {recipe.missedIngredientCount > 0 &&
+                  ` and requires ${recipe.missedIngredientCount} additional ingredients`}
+                .
               </Text>
             </View>
-            
+
             <View style={styles.summaryContainer}>
               <Text style={styles.sectionTitle}>About this Recipe</Text>
-              <Text style={styles.summaryText}>{recipe.summary}</Text>
+              <HTMLText html={recipe.summary} />
             </View>
-            
-            <Pressable 
+
+            <Pressable
               style={({ pressed }) => [
                 styles.viewRecipeButton,
-                pressed && styles.pressed
+                pressed && styles.pressed,
               ]}
               onPress={handleOpenRecipe}
             >
@@ -99,10 +162,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.background,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: Colors.textLight,
+  },
   notFound: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 24,
   },
   notFoundText: {
@@ -117,31 +191,39 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   backButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
   },
   image: {
-    width: '100%',
+    width: "100%",
     height: 250,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: "#f0f0f0",
+  },
+  placeholderImage: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderText: {
+    color: Colors.textLight,
+    fontSize: 16,
   },
   content: {
     padding: 16,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.text,
     marginBottom: 16,
   },
   metaContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 24,
     gap: 16,
   },
   metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   metaText: {
@@ -150,7 +232,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.text,
     marginBottom: 8,
   },
@@ -173,10 +255,15 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 24,
   },
+  htmlText: {
+    fontSize: 16,
+    color: Colors.text,
+    lineHeight: 24,
+  },
   viewRecipeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: Colors.primary,
     paddingVertical: 16,
     borderRadius: 12,
@@ -184,9 +271,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   viewRecipeButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   pressed: {
     opacity: 0.9,

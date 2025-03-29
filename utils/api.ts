@@ -29,7 +29,8 @@ const DEV_MODE = true; // Temporarily using development mode until Supabase tabl
 // Recipe API functions
 export const fetchRecipesByIngredients = async (
   ingredients: string[],
-  dietaryPreferences: string[] = []
+  dietaryPreferences: string[] = [],
+  cuisinePreferences: string[] = []
 ) => {
   try {
     if (ingredients.length === 0) {
@@ -40,106 +41,105 @@ export const fetchRecipesByIngredients = async (
     const ingredientsString = ingredients.join(",");
     console.log(`Fetching recipes for ingredients: ${ingredientsString}`);
 
-    // Build diet parameter if user has dietary preferences
-    let dietParam = "";
+    // Build query parameters
+    const params = new URLSearchParams();
+
+    // Add API key
+    params.append("apiKey", SPOONACULAR_API_KEY);
+
+    // Use complex search instead of findByIngredients for better filtering
+    params.append("includeIngredients", ingredientsString);
+    params.append("fillIngredients", "true"); // Get details about used/missed ingredients
+    params.append("addRecipeInformation", "true"); // Get full recipe details
+    params.append("sort", "max-used-ingredients"); // Sort by maximum used ingredients
+    params.append("number", "10"); // Limit to 10 recipes
+
+    // Apply dietary preferences if provided
     if (dietaryPreferences && dietaryPreferences.length > 0) {
-      dietParam = `&diet=${dietaryPreferences.join(",")}`;
+      params.append("diet", dietaryPreferences.join(","));
       console.log(`Applied dietary filters: ${dietaryPreferences.join(",")}`);
     }
 
-    // Step 1: Find recipes that match our ingredients
-    const findResponse = await fetch(
-      `${SPOONACULAR_BASE_URL}/recipes/findByIngredients?ingredients=${ingredientsString}&number=10&ranking=1&ignorePantry=false&apiKey=${SPOONACULAR_API_KEY}${dietParam}`
-    );
+    // Apply cuisine preferences if provided
+    if (cuisinePreferences && cuisinePreferences.length > 0) {
+      params.append("cuisine", cuisinePreferences.join(","));
+      console.log(`Applied cuisine filters: ${cuisinePreferences.join(",")}`);
+    }
 
-    if (!findResponse.ok) {
+    // Use the complexSearch endpoint for better filtering
+    const searchUrl = `${SPOONACULAR_BASE_URL}/recipes/complexSearch?${params.toString()}`;
+    const response = await fetch(searchUrl);
+
+    if (!response.ok) {
       // Check specifically for quota exceeded error
-      if (findResponse.status === 402) {
+      if (response.status === 402) {
         console.log("API quota exceeded (402) - using mock data instead");
         throw new Error("API_QUOTA_EXCEEDED");
       }
-      throw new Error(`API error: ${findResponse.status}`);
+      throw new Error(`API error: ${response.status}`);
     }
 
-    const recipesBasicInfo = (await findResponse.json()) as Array<{
-      id: number;
-      title: string;
-      image: string;
-      usedIngredientCount: number;
-      missedIngredientCount: number;
-      likes: number;
-    }>;
+    const searchResults = await response.json();
 
-    if (!recipesBasicInfo || recipesBasicInfo.length === 0) {
-      console.log("No recipes found for the given ingredients");
+    if (!searchResults.results || searchResults.results.length === 0) {
+      console.log("No recipes found for the given ingredients and preferences");
       return [];
     }
 
-    console.log(`Found ${recipesBasicInfo.length} recipes for the ingredients`);
-
-    // Step 2: Get more detailed information for each recipe
-    const recipeIds = recipesBasicInfo.map((recipe) => recipe.id).join(",");
-    const detailsResponse = await fetch(
-      `${SPOONACULAR_BASE_URL}/recipes/informationBulk?ids=${recipeIds}&apiKey=${SPOONACULAR_API_KEY}`
+    console.log(
+      `Found ${searchResults.results.length} recipes matching criteria`
     );
 
-    if (!detailsResponse.ok) {
-      // Check specifically for quota exceeded error here too
-      if (detailsResponse.status === 402) {
-        console.log("API quota exceeded (402) - using mock data instead");
-        throw new Error("API_QUOTA_EXCEEDED");
-      }
-
-      // If we can't get details, we'll just use the basic info
-      console.warn(
-        `Couldn't fetch detailed recipe info: ${detailsResponse.status}`
-      );
-      return recipesBasicInfo.map((item) => ({
-        id: item.id.toString(),
-        title: item.title,
-        imageUrl: item.image,
-        readyInMinutes: 30, // Default value
-        servings: 4, // Default value
-        sourceUrl: "",
-        summary: "",
-        usedIngredientCount: item.usedIngredientCount,
-        missedIngredientCount: item.missedIngredientCount,
-        likes: item.likes || 0,
-      }));
-    }
-
-    const detailedRecipes = (await detailsResponse.json()) as Array<{
-      id: number;
-      title: string;
-      image: string;
-      readyInMinutes: number;
-      servings: number;
-      sourceUrl: string;
-      summary: string;
-      aggregateLikes: number;
-    }>;
-
-    // Step 3: Merge the detailed info with the ingredient matching info
-    return detailedRecipes.map((detailedRecipe) => {
-      const basicInfo = recipesBasicInfo.find(
-        (r) => r.id === detailedRecipe.id
-      );
-
-      return {
-        id: detailedRecipe.id.toString(),
-        title: detailedRecipe.title,
-        imageUrl: detailedRecipe.image,
-        readyInMinutes: detailedRecipe.readyInMinutes,
-        servings: detailedRecipe.servings,
-        sourceUrl: detailedRecipe.sourceUrl || "",
-        summary: detailedRecipe.summary || "",
-        usedIngredientCount: basicInfo ? basicInfo.usedIngredientCount : 0,
-        missedIngredientCount: basicInfo ? basicInfo.missedIngredientCount : 0,
-        likes: detailedRecipe.aggregateLikes || 0,
-      };
-    });
+    // Transform the data to match our Recipe type
+    return searchResults.results.map((recipe: any) => ({
+      id: recipe.id.toString(),
+      title: recipe.title,
+      imageUrl: recipe.image, // Image URL from API
+      readyInMinutes: recipe.readyInMinutes || 30,
+      servings: recipe.servings || 4,
+      sourceUrl: recipe.sourceUrl || "",
+      summary: recipe.summary || "",
+      usedIngredientCount: recipe.usedIngredientCount || 0,
+      missedIngredientCount: recipe.missedIngredientCount || 0,
+      likes: recipe.aggregateLikes || 0,
+    }));
   } catch (error) {
     console.error("Error fetching recipes:", error);
+    throw error;
+  }
+};
+
+// Get detailed information for a specific recipe
+export const getRecipeDetails = async (recipeId: string) => {
+  try {
+    const url = `${SPOONACULAR_BASE_URL}/recipes/${recipeId}/information?apiKey=${SPOONACULAR_API_KEY}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      if (response.status === 402) {
+        throw new Error("API_QUOTA_EXCEEDED");
+      }
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const recipeDetails = await response.json();
+
+    return {
+      id: recipeDetails.id.toString(),
+      title: recipeDetails.title,
+      imageUrl: recipeDetails.image,
+      readyInMinutes: recipeDetails.readyInMinutes || 30,
+      servings: recipeDetails.servings || 4,
+      sourceUrl: recipeDetails.sourceUrl || "",
+      summary: recipeDetails.summary || "",
+      instructions: recipeDetails.instructions || "",
+      extendedIngredients: recipeDetails.extendedIngredients || [],
+      usedIngredientCount: 0, // These will be filled in by the calling code
+      missedIngredientCount: 0,
+      likes: recipeDetails.aggregateLikes || 0,
+    };
+  } catch (error) {
+    console.error(`Error fetching details for recipe ${recipeId}:`, error);
     throw error;
   }
 };
