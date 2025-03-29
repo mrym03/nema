@@ -1,28 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import { useRecipeStore } from '@/store/recipeStore';
 import Colors from '@/constants/colors';
-import { Clock, Users, ThumbsUp, ExternalLink, ArrowLeft, Check, X } from 'lucide-react-native';
-import HTMLView from 'react-native-htmlview';
+import { Clock, Users, ThumbsUp, ExternalLink } from 'lucide-react-native';
 
 export default function RecipeDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getRecipeById, isLoading } = useRecipeStore();
+  const { getRecipeById } = useRecipeStore();
   
   const recipe = getRecipeById(id);
-  
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Loading recipe details...</Text>
-      </View>
-    );
-  }
   
   if (!recipe) {
     return (
@@ -39,46 +29,19 @@ export default function RecipeDetailsScreen() {
   }
   
   const handleOpenRecipe = () => {
-    if (recipe.sourceUrl) {
-      Linking.openURL(recipe.sourceUrl);
-    } else {
-      // If no source URL, show a message or handle as needed
-      console.log('No source URL available for this recipe');
-    }
+    Linking.openURL(recipe.sourceUrl);
   };
-  
-  // Clean up HTML content for display
-  const cleanSummary = recipe.summary
-    ? recipe.summary.replace(/<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g, '$2')
-    : 'No summary available for this recipe.';
   
   return (
     <>
-      <Stack.Screen 
-        options={{ 
-          title: recipe.title,
-          headerLeft: () => (
-            <Pressable 
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                styles.headerButton,
-                pressed && styles.pressed
-              ]}
-            >
-              <ArrowLeft size={24} color={Colors.text} />
-            </Pressable>
-          )
-        }} 
-      />
+      <Stack.Screen options={{ title: recipe.title }} />
       
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView>
           <Image
             source={recipe.imageUrl}
             style={styles.image}
             contentFit="cover"
-            placeholder="Loading..."
-            transition={300}
           />
           
           <View style={styles.content}>
@@ -103,41 +66,23 @@ export default function RecipeDetailsScreen() {
             
             <View style={styles.ingredientsContainer}>
               <Text style={styles.sectionTitle}>Ingredients</Text>
-              <View style={styles.ingredientsInfo}>
-                <View style={styles.ingredientRow}>
-                  <Check size={16} color={Colors.success} />
-                  <Text style={styles.ingredientText}>
-                    {recipe.usedIngredientCount} ingredient{recipe.usedIngredientCount !== 1 ? 's' : ''} from your pantry
-                  </Text>
-                </View>
-                
-                {recipe.missedIngredientCount > 0 && (
-                  <View style={styles.ingredientRow}>
-                    <X size={16} color={Colors.danger} />
-                    <Text style={styles.ingredientText}>
-                      {recipe.missedIngredientCount} additional ingredient{recipe.missedIngredientCount !== 1 ? 's' : ''} needed
-                    </Text>
-                  </View>
-                )}
-              </View>
+              <Text style={styles.ingredientsText}>
+                This recipe uses {recipe.usedIngredientCount} ingredients from your pantry
+                {recipe.missedIngredientCount > 0 && ` and requires ${recipe.missedIngredientCount} additional ingredients`}.
+              </Text>
             </View>
             
             <View style={styles.summaryContainer}>
               <Text style={styles.sectionTitle}>About this Recipe</Text>
-              <HTMLView
-                value={`<div>${cleanSummary}</div>`}
-                stylesheet={htmlStyles}
-              />
+              <Text style={styles.summaryText}>{recipe.summary}</Text>
             </View>
             
             <Pressable 
               style={({ pressed }) => [
                 styles.viewRecipeButton,
-                pressed && styles.pressed,
-                !recipe.sourceUrl && styles.disabledButton
+                pressed && styles.pressed
               ]}
               onPress={handleOpenRecipe}
-              disabled={!recipe.sourceUrl}
             >
               <Text style={styles.viewRecipeButtonText}>View Full Recipe</Text>
               <ExternalLink size={20} color="#fff" />
@@ -149,44 +94,10 @@ export default function RecipeDetailsScreen() {
   );
 }
 
-const htmlStyles = StyleSheet.create({
-  div: {
-    fontSize: 16,
-    color: Colors.text,
-    lineHeight: 24,
-  },
-  p: {
-    marginBottom: 10,
-  },
-  b: {
-    fontWeight: 'bold',
-  },
-  i: {
-    fontStyle: 'italic',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 30, // Add extra padding at the bottom
-  },
-  headerButton: {
-    padding: 8,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: Colors.textLight,
-    marginTop: 12,
   },
   notFound: {
     flex: 1,
@@ -244,24 +155,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   ingredientsContainer: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.primaryLight,
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  ingredientsInfo: {
-    gap: 8,
-  },
-  ingredientRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ingredientText: {
+  ingredientsText: {
     fontSize: 16,
-    color: Colors.text,
+    color: Colors.primary,
     lineHeight: 22,
   },
   summaryContainer: {
@@ -281,10 +182,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 24,
     gap: 8,
-  },
-  disabledButton: {
-    backgroundColor: Colors.textLight,
-    opacity: 0.7,
   },
   viewRecipeButtonText: {
     color: '#fff',
