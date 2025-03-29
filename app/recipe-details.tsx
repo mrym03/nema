@@ -8,6 +8,8 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
+  TouchableOpacity,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter, useLocalSearchParams } from "expo-router";
@@ -27,6 +29,8 @@ import {
   GripHorizontal,
   ShoppingCart,
   CookingPot,
+  PlayCircle,
+  Calendar,
 } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Animatable from "react-native-animatable";
@@ -75,7 +79,7 @@ try {
 export default function RecipeDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getRecipeById } = useRecipeStore();
+  const { getRecipeById, toggleRecipeSelection, isRecipeSelected } = useRecipeStore();
   const { items: pantryItems } = usePantryStore();
   const [recipe, setRecipe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +92,7 @@ export default function RecipeDetailsScreen() {
     waterSavings: number;
     percentOfAnnualWaste: number;
   } | null>(null);
+  const [recipeAdded, setRecipeAdded] = useState(false);
 
   useEffect(() => {
     const loadRecipeDetails = async () => {
@@ -95,6 +100,7 @@ export default function RecipeDetailsScreen() {
         setLoading(true);
         const recipeData = await getRecipeById(id);
         setRecipe(recipeData);
+        setRecipeAdded(isRecipeSelected(id));
         setLoading(false);
       } catch (err) {
         console.error("Error loading recipe details:", err);
@@ -234,6 +240,22 @@ export default function RecipeDetailsScreen() {
         [{ text: "Great!" }]
       );
     }, 1500);
+  };
+
+  const handleAddToMealPlan = () => {
+    toggleRecipeSelection(recipe);
+    setRecipeAdded(!recipeAdded);
+    
+    if (!recipeAdded) {
+      Alert.alert(
+        "Recipe Added", 
+        "Recipe has been added to your meal planning selection. Go to the Meal Plan tab to organize your weekly meals.",
+        [
+          { text: "View Meal Plan", onPress: () => router.push("/(tabs)/meal-plan") },
+          { text: "Continue Browsing", style: "cancel" }
+        ]
+      );
+    }
   };
 
   // Clean up HTML content for display
@@ -461,42 +483,25 @@ export default function RecipeDetailsScreen() {
               style={styles.buttonContainer}
             >
               <View style={styles.buttonsRow}>
-                <PrimaryButton
-                  title="View Full Recipe"
-                  onPress={handleOpenRecipe}
-                  disabled={!recipe.sourceUrl}
-                  icon={<ExternalLink size={20} color="#FFFFFF" />}
-                  style={styles.buttonHalf}
-                />
+                <View style={styles.buttonHalf}>
+                  <PrimaryButton
+                    title={recipeAdded ? "Added to Plan" : "Add to Meal Plan"}
+                    onPress={handleAddToMealPlan}
+                    icon={recipeAdded ? <Check size={20} color={Colors.success} /> : <Calendar size={20} color="#FFFFFF" />}
+                  />
+                </View>
                 
-                <PrimaryButton
-                  title={isCooking ? "Preparing..." : "Cook Recipe"}
-                  onPress={handleCookRecipe}
-                  disabled={isCooking || available.length === 0 || cookingComplete}
-                  icon={<CookingPot size={20} color="#FFFFFF" />}
-                  style={[
-                    styles.buttonHalf, 
-                    cookingComplete ? styles.buttonSuccess : null
-                  ]}
-                  loading={isCooking}
-                />
+                <View style={styles.buttonHalf}>
+                  <PrimaryButton
+                    title={cookingComplete ? "Cooked!" : "Cook Now"}
+                    onPress={handleCookRecipe}
+                    icon={<PlayCircle size={20} color="#FFFFFF" />}
+                    variant="primary"
+                    loading={isCooking}
+                    disabled={isCooking || cookingComplete}
+                  />
+                </View>
               </View>
-              
-              {cookingComplete && (
-                <Animatable.View 
-                  animation="fadeIn" 
-                  duration={500} 
-                  style={styles.sustainabilityInfo}
-                >
-                  <Text style={styles.sustainabilityTitle}>
-                    Pantry Updated!
-                  </Text>
-                  <Text style={styles.sustainabilityText}>
-                    Your pantry has been updated with the ingredients used in this recipe. 
-                    Items have been marked as opened and quantities adjusted accordingly.
-                  </Text>
-                </Animatable.View>
-              )}
             </Animatable.View>
           </View>
         </ScrollView>

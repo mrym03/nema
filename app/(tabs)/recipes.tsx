@@ -142,7 +142,7 @@ export default function RecipesScreen() {
   };
 
   const handleViewMealPlanner = () => {
-    router.push("/meal-planner");
+    router.push("/(tabs)/meal-plan");
   };
 
   const renderItem = useCallback(
@@ -266,7 +266,7 @@ export default function RecipesScreen() {
           >
             <Calendar size={20} color="#FFFFFF" />
             <Text style={styles.shoppingListButtonText}>
-              Create Weekly Meal Plan ({selectedRecipes.length})
+              View Meal Plan ({selectedRecipes.length})
             </Text>
           </TouchableOpacity>
         )}

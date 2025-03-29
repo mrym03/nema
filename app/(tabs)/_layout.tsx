@@ -1,15 +1,19 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
-import { StyleSheet, View, Platform, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Colors from '@/constants/colors';
+import { Platform, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
+import { Stack, Tabs } from 'expo-router';
 import { 
-  ShoppingCart, 
-  Apple, 
-  BookOpen, 
-  User,
-  Home
+  Home, 
+  Search, 
+  ShoppingBag, 
+  List,
+  Calendar,
+  Settings,
+  Home as HomeIcon, 
+  User
 } from 'lucide-react-native';
+import Colors from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePathname } from 'expo-router';
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -34,175 +38,196 @@ try {
   console.warn('react-native-animatable not available, using fallback');
 }
 
-// Custom tab bar component with animations
-// Using any type to avoid complex typing issues with the tab navigator
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function TabBar(props: any) {
-  const { state, descriptors, navigation } = props;
+function TabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
-  
-  // Check if LinearGradient and Animatable are available
+  const pathname = usePathname();
+
+  // Check if required components are available
   const shouldUseGradient = LinearGradient !== View;
   const AnimatableView = Animatable.View || View;
   
-  const TabBarContainer = shouldUseGradient 
-    ? LinearGradient
-    : View;
-  
-  const tabBarContainerProps = shouldUseGradient 
-    ? {
-        colors: ['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.98)'],
-        start: { x: 0, y: 0 },
-        end: { x: 1, y: 0 },
-        style: [
-          styles.tabBar,
-          { paddingBottom: insets.bottom || 15 }
-        ]
-      }
-    : {
-        style: [
-          styles.tabBar, 
-          { backgroundColor: 'rgba(255,255,255,0.95)' },
-          { paddingBottom: insets.bottom || 15 }
-        ]
-      };
-  
+  // Get current tab name
+  const getCurrentTabName = () => {
+    const route = state.routes[state.index];
+    return route?.name || '';
+  };
+
   return (
-    <TabBarContainer {...tabBarContainerProps}>
-      {state.routes.map((route: any, index: number) => {
-        const { options } = descriptors[route.key];
-        const isFocused = state.index === index;
+    <View style={[
+      styles.container,
+      {
+        height: 70 + (insets.bottom > 0 ? insets.bottom : 15),
+        paddingBottom: insets.bottom > 0 ? insets.bottom : 15
+      }
+    ]}>
+      {shouldUseGradient ? (
+        <LinearGradient
+          colors={['rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0.97)']}
+          style={styles.background}
+        />
+      ) : (
+        <View style={[styles.background, { backgroundColor: 'rgba(255, 255, 255, 0.95)' }]} />
+      )}
+      
+      <View style={styles.tabsContainer}>
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const label = options.tabBarLabel || options.title || route.name;
+          
+          const isFocused = state.index === index;
+          
+          // Get the appropriate icon based on the route name
+          const getIcon = () => {
+            const iconProps = {
+              size: 24,
+              color: isFocused ? Colors.primary : Colors.textLight,
+              style: { marginBottom: 2 }
+            };
+            
+            switch (route.name) {
+              case 'index':
+                return <HomeIcon {...iconProps} />;
+              case 'recipes':
+                return <Search {...iconProps} />;
+              case 'meal-plan':
+                return <Calendar {...iconProps} />;
+              case 'grocery-list':
+                return <ShoppingBag {...iconProps} />;
+              case 'settings':
+                return <Settings {...iconProps} />;
+              default:
+                return <List {...iconProps} />;
+            }
+          };
+          
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
 
-        const getIcon = () => {
-          const iconColor = isFocused ? Colors.primary : Colors.textLight;
-          const size = 24;
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate({ name: route.name, merge: true });
+            }
+          };
 
-          switch (route.name) {
-            case 'index':
-              return <Home size={size} color={iconColor} />;
-            case 'shopping-list':
-              return <ShoppingCart size={size} color={iconColor} />;
-            case 'recipes':
-              return <BookOpen size={size} color={iconColor} />;
-            case 'account':
-              return <User size={size} color={iconColor} />;
-            default:
-              return <Home size={size} color={iconColor} />;
-          }
-        };
-
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
-
-        const getLabel = () => {
-          switch (route.name) {
-            case 'index':
-              return 'My Pantry';
-            case 'shopping-list':
-              return 'Shopping';
-            case 'recipes':
-              return 'Recipes';
-            case 'account':
-              return 'Account';
-            default:
-              return route.name;
-          }
-        };
-
-        return (
-          <Pressable
-            key={route.key}
-            onPress={onPress}
-            style={styles.tabItem}
-            android_ripple={{ color: Colors.primaryLight, borderless: true }}
-          >
-            <View style={styles.tabItemContainer}>
-              {isFocused ? (
-                <AnimatableView
-                  animation="bounceIn"
-                  duration={500}
-                >
-                  {getIcon()}
-                </AnimatableView>
-              ) : (
-                getIcon()
-              )}
+          return (
+            <TouchableOpacity
+              key={index}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              testID={options.tabBarTestID}
+              onPress={onPress}
+              style={styles.tabButton}
+            >
+              {getIcon()}
+              
+              <Text style={[
+                styles.tabLabel,
+                { color: isFocused ? Colors.primary : Colors.textLight }
+              ]}>
+                {label === 'index' ? 'Pantry' : 
+                 label === 'grocery-list' ? 'Grocery' :
+                 label.charAt(0).toUpperCase() + label.slice(1)}
+              </Text>
               
               {isFocused && (
-                <AnimatableView 
-                  animation="fadeIn" 
-                  duration={300}
-                  style={styles.indicator}
-                />
+                <View style={styles.activeIndicator} />
               )}
-            </View>
-          </Pressable>
-        );
-      })}
-    </TabBarContainer>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { display: 'none' },
       }}
       tabBar={props => <TabBar {...props} />}
     >
-      <Tabs.Screen name="index" />
-      <Tabs.Screen name="shopping-list" />
-      <Tabs.Screen name="recipes" />
-      <Tabs.Screen name="account" />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Pantry',
+        }}
+      />
+      <Tabs.Screen
+        name="recipes"
+        options={{
+          title: 'Recipes',
+        }}
+      />
+      <Tabs.Screen
+        name="meal-plan"
+        options={{
+          title: 'Meal Plan',
+        }}
+      />
+      <Tabs.Screen
+        name="grocery-list"
+        options={{
+          title: 'Grocery List',
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+        }}
+      />
     </Tabs>
   );
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    flexDirection: 'row',
-    height: 'auto',
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    shadowColor: Colors.shadowMedium,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 10,
+  container: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    zIndex: 100,
   },
-  tabItem: {
+  background: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    height: 70,
+  },
+  tabButton: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 8,
   },
-  tabItemContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    height: 45,
+  tabLabel: {
+    fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  indicator: {
+  activeIndicator: {
     position: 'absolute',
-    bottom: -10,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+    bottom: 0,
+    width: 20,
+    height: 3,
     backgroundColor: Colors.primary,
-  },
+    borderRadius: 1.5,
+  }
 });

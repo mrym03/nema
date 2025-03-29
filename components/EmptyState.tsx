@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import Colors from '@/constants/colors';
 
@@ -7,9 +7,13 @@ interface EmptyStateProps {
   title: string;
   message: string;
   imageUrl?: string;
+  actionButton?: {
+    title: string;
+    onPress: () => void;
+  };
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ title, message, imageUrl }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ title, message, imageUrl, actionButton }) => {
   return (
     <View style={styles.container}>
       {imageUrl && (
@@ -21,6 +25,15 @@ const EmptyState: React.FC<EmptyStateProps> = ({ title, message, imageUrl }) => 
       )}
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
+      
+      {actionButton && (
+        <TouchableOpacity 
+          style={styles.button}
+          onPress={actionButton.onPress}
+        >
+          <Text style={styles.buttonText}>{actionButton.title}</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -49,6 +62,19 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     maxWidth: '80%',
+    marginBottom: 24,
+  },
+  button: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
