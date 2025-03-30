@@ -152,6 +152,10 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
         item.name.toLowerCase()
       );
 
+      console.log("Pantry ingredients:", pantryIngredients);
+      console.log("Dietary preferences:", dietaryPreferences);
+      console.log("Cuisine preferences:", cuisinePreferences);
+
       // We'll set these from the component where we have access to the hook
       const mealsPerDay = 3; // Default to 3 meals per day
       const daysInWeek = 7;
@@ -636,6 +640,7 @@ function generateRuleBasedMealPlan(
   console.log(
     `Setting max usage per recipe to ${maxUsagePerRecipe} based on ${scoredRecipes.length} available recipes`
   );
+  console.log(`Using meal types: ${mealTypes.join(", ")}`);
 
   // Make a deep copy of the scored recipes array to avoid modifying the original
   let allRecipes = [...scoredRecipes].sort((a, b) => b.score - a.score);
@@ -674,11 +679,17 @@ function generateRuleBasedMealPlan(
       (recipeUsageCount[selection.recipeId] || 0) + 1;
   });
 
-  // Loop through each day and meal type
-  for (let day = 0; day < 7; day++) {
-    for (const mealType of mealTypes) {
+  // Process meal types in order to ensure breakfast is always assigned first
+  for (const mealType of mealTypes) {
+    console.log(`Processing meal type: ${mealType}`);
+
+    // Then go through each day
+    for (let day = 0; day < 7; day++) {
       // Skip if this slot already has a recipe assigned
       if (assignedSlots[day]?.[mealType]) {
+        console.log(
+          `Day ${day}, ${mealType} already has a recipe assigned. Skipping.`
+        );
         continue;
       }
 
@@ -692,12 +703,45 @@ function generateRuleBasedMealPlan(
         (recipe) => (recipeUsageCount[recipe.id] || 0) < maxUsagePerRecipe
       );
 
+      // If we're assigning breakfast meals, prioritize breakfast category recipes
+      if (mealType === "breakfast" && availableByUsage.length > 0) {
+        const breakfastRecipes = availableByUsage.filter((recipe) => {
+          // Check various properties that might indicate a breakfast recipe
+          // Handle different API response formats and custom properties safely
+          const recipeCategory =
+            (recipe as any).category?.toLowerCase?.() ||
+            (recipe as any).strCategory?.toLowerCase?.() ||
+            "";
+          const recipeTitle =
+            recipe.title?.toLowerCase?.() ||
+            (recipe as any).strMeal?.toLowerCase?.() ||
+            "";
+
+          return (
+            recipeCategory === "breakfast" ||
+            recipeTitle.includes("breakfast") ||
+            recipeTitle.includes("morning") ||
+            recipeTitle.includes("pancake") ||
+            recipeTitle.includes("waffle") ||
+            recipeTitle.includes("egg") ||
+            recipeTitle.includes("toast")
+          );
+        });
+
+        if (breakfastRecipes.length > 0) {
+          availableByUsage = breakfastRecipes;
+          console.log(
+            `Found ${breakfastRecipes.length} breakfast-specific recipes for day ${day}`
+          );
+        }
+      }
+
       // If we have recipes available that haven't hit their usage limit, use those
       if (availableByUsage.length > 0) {
         availableForDay = availableByUsage;
       } else if (availableForDay.length === 0) {
         console.log(
-          `All recipes have been used max times, resetting recipe usage for day ${day}`
+          `All recipes have been used max times, resetting recipe usage for day ${day}, meal ${mealType}`
         );
         // If no recipes available for this day, check if we can reset counting
         availableForDay = allRecipes.filter(
@@ -706,7 +750,7 @@ function generateRuleBasedMealPlan(
 
         if (availableForDay.length === 0) {
           console.log(
-            `Still no available recipes after reset, using all recipes`
+            `Still no available recipes after reset, using all recipes for day ${day}, meal ${mealType}`
           );
           // If still no recipes, use any recipe (to fill all slots)
           availableForDay = allRecipes;
@@ -794,6 +838,10 @@ function generateRuleBasedMealPlan(
           // Return the recipe with a slightly reduced score
           { ...selectedRecipe, score: selectedRecipe.score * 0.85 },
         ];
+      } else {
+        console.log(
+          `WARNING: No recipe available for day ${day}, meal ${mealType}`
+        );
       }
     }
   }
