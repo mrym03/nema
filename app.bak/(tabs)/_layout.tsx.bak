@@ -56,6 +56,16 @@ function TabBar({ state, descriptors, navigation }: any) {
     return route?.name || '';
   };
 
+  // Define tab icons order - rearrange to put sustainability after grocery-list
+  const icons = [
+    <Home size={24} />,
+    <Scan size={24} />,
+    <ChefHat size={24} />,
+    <Calendar size={24} />,
+    <ShoppingCart size={24} />,
+    <Leaf size={24} />,
+  ];
+
   return (
     <View style={[
       styles.container,
@@ -97,9 +107,9 @@ function TabBar({ state, descriptors, navigation }: any) {
                 return <ChefHat {...iconProps} />;
               case 'meal-plan':
                 return <Calendar {...iconProps} />;
-              case 'shopping-list':
+              case 'grocery-list':
                 return <ShoppingCart {...iconProps} />;
-              case 'zz-sustainability':
+              case 'sustainability':
                 return <Leaf {...iconProps} />;
               default:
                 return <List {...iconProps} />;
@@ -120,7 +130,7 @@ function TabBar({ state, descriptors, navigation }: any) {
 
           return (
             <TouchableOpacity
-              key={route.key}
+              key={index}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel}
@@ -135,8 +145,8 @@ function TabBar({ state, descriptors, navigation }: any) {
                 { color: isFocused ? Colors.primary : Colors.textLight }
               ]}>
                 {label === 'index' ? 'Pantry' : 
-                 label === 'shopping-list' ? 'Grocery' :
-                 label}
+                 label === 'grocery-list' ? 'Grocery' :
+                 label.charAt(0).toUpperCase() + label.slice(1)}
               </Text>
               
               {isFocused && (
@@ -183,13 +193,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="shopping-list"
+        name="grocery-list"
         options={{
           title: 'Shopping-list',
         }}
       />
       <Tabs.Screen
-        name="zz-sustainability"
+        name="sustainability"
         options={{
           title: 'Sustainability',
         }}

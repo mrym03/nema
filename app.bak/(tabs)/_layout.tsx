@@ -97,9 +97,9 @@ function TabBar({ state, descriptors, navigation }: any) {
                 return <ChefHat {...iconProps} />;
               case 'meal-plan':
                 return <Calendar {...iconProps} />;
-              case 'shopping-list':
+              case 'grocery-list':
                 return <ShoppingCart {...iconProps} />;
-              case 'zz-sustainability':
+              case 'sustainability':
                 return <Leaf {...iconProps} />;
               default:
                 return <List {...iconProps} />;
@@ -135,7 +135,7 @@ function TabBar({ state, descriptors, navigation }: any) {
                 { color: isFocused ? Colors.primary : Colors.textLight }
               ]}>
                 {label === 'index' ? 'Pantry' : 
-                 label === 'shopping-list' ? 'Grocery' :
+                 label === 'grocery-list' ? 'Grocery' :
                  label}
               </Text>
               
@@ -183,13 +183,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="shopping-list"
+        name="grocery-list"
         options={{
           title: 'Shopping-list',
         }}
       />
       <Tabs.Screen
-        name="zz-sustainability"
+        name="sustainability"
         options={{
           title: 'Sustainability',
         }}

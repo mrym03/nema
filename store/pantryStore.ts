@@ -4,7 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { FoodItem, FoodCategory } from '@/types';
 import { mockFoodItems } from '@/mocks/foodItems';
 import { generateId } from '@/utils/helpers';
-import { syncPantryToCloud, fetchPantryFromCloud, lookupBarcodeUPC } from '@/utils/api';
+import { syncPantryToCloud, fetchPantryFromCloud, lookupBarcodeUPC, getCurrentUser } from '@/utils/api';
 
 // Debug function to check what's in AsyncStorage
 const debugAsyncStorage = async () => {
@@ -33,6 +33,7 @@ const USER_ID = 'user123';
 
 interface PantryState {
   items: FoodItem[];
+  expiredItems: FoodItem[];
   isLoading: boolean;
   error: string | null;
   addItem: (item: Omit<FoodItem, 'id' | 'addedAt'>) => void;
@@ -44,6 +45,7 @@ interface PantryState {
   syncWithCloud: () => Promise<void>;
   addItemByBarcode: (barcode: string) => Promise<FoodItem | null>;
   toggleItemOpenStatus: (id: string) => void;
+  markAsExpired: (id: string) => Promise<void>;
 }
 
 export const usePantryStore = create<PantryState>()(
@@ -53,6 +55,7 @@ export const usePantryStore = create<PantryState>()(
       
       return {
         items: [],  // Start with empty array instead of mockFoodItems
+        expiredItems: [],
         isLoading: false,
         error: null,
         
@@ -285,6 +288,22 @@ export const usePantryStore = create<PantryState>()(
             syncPantryToCloud(USER_ID, newItems).catch(console.error);
             return { items: newItems };
           });
+        },
+        
+        markAsExpired: async (id) => {
+          const item = get().items.find((item) => item.id === id);
+          if (!item) return;
+          
+          set((state) => ({
+            items: state.items.filter((item) => item.id !== id),
+            expiredItems: [...state.expiredItems, item],
+          }));
+          
+          // Sync to storage if needed
+          const user = await getCurrentUser();
+          if (user) {
+            await syncPantryToCloud(user.id, get().items);
+          }
         }
       };
     },
