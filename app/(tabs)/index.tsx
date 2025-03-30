@@ -358,7 +358,7 @@ export default function PantryScreen() {
       <SafeAreaView style={styles.header} edges={['top']}>
         <AnimatableView animation={fadeInDownFast} duration={600}>
           <View style={styles.headerContent}>
-            <View>
+            <View style={styles.titleContainer}>
               <MaskedView
                 maskElement={
                   <Text style={styles.titleMask}>My Pantry</Text>
@@ -369,10 +369,10 @@ export default function PantryScreen() {
                     colors={[Colors.primary, Colors.primaryDark]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={[styles.titleGradient, { width: width * 0.6 }]}
+                    style={styles.titleGradient}
                   />
                 ) : (
-                  <View style={[styles.titleGradient, { backgroundColor: Colors.primary, width: width * 0.6 }]} />
+                  <View style={[styles.titleGradient, { backgroundColor: Colors.primary }]} />
                 )}
               </MaskedView>
               <Text style={styles.subtitle}>
@@ -580,14 +580,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'nowrap',
+  },
+  titleContainer: {
+    flex: 1,
+    marginRight: 16,
   },
   titleMask: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: '#000000',
   },
   titleGradient: {
-    height: 50,
+    height: 45,
+    width: '100%',
   },
   subtitle: {
     fontSize: 16,
@@ -596,12 +602,13 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
+    flexShrink: 0,
   },
   iconButtonCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
