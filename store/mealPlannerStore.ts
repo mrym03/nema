@@ -386,20 +386,25 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
           "pantryUsage": "explanation of how the plan uses pantry items efficiently",
           "expiryOptimization": "explanation of how items close to expiry are prioritized",
           "varietyStrategy": "explanation of how variety is maintained",
-          "suggestedRecipesUsage": "explanation of how the suggested similar recipes were incorporated"
+          "suggestedRecipesUsage": "explanation of how the suggested similar recipes were incorporated",
+          "ingredientMinimization": "explanation of how the total number of unique ingredients was minimized"
         }
       }
       
-      Rules for creating the meal plan:
-      1. No recipe should be used twice on the same day
-      2. Prioritize recipes using ingredients that will expire soon
-      3. Try to minimize food waste by using existing pantry items efficiently
-      4. Honor the existing meal assignments in existingAssignments
-      5. For each day, include the number of meals specified by mealsPerDay
-      6. Try to maintain variety across the week while using pantry items efficiently
-      7. Consider the initialScores as a starting point but you can adjust based on a more holistic view
-      8. Use a good mix of user-selected recipes (marked with isUserSelected=true) and similar suggested recipes
-      9. Group recipes with complementary ingredients together on the same day to maximize ingredient usage
+      Rules for creating the meal plan (in priority order):
+      1. Honor the existing meal assignments in existingAssignments
+      2. No recipe should be used twice on the same day
+      3. STRONGLY PRIORITIZE recipes with fewer total ingredients
+      4. STRONGLY PRIORITIZE recipes with more overlapping ingredients with other chosen recipes
+      5. Prioritize recipes using ingredients that will expire soon
+      6. Try to minimize food waste by using existing pantry items efficiently
+      7. For each day, include the number of meals specified by mealsPerDay
+      8. Try to maintain variety across the week while using pantry items efficiently
+      9. Consider the initialScores as a starting point but you can adjust based on a more holistic view
+      10. Use a good mix of user-selected recipes (marked with isUserSelected=true) and similar suggested recipes
+      11. Group recipes with complementary ingredients together on the same day to maximize ingredient usage
+      
+      The PRIMARY GOAL is to minimize the total number of unique ingredients needed across all recipes for the entire week, while still creating appealing and varied meals. If you need to choose between two recipes, always select the one that introduces fewer new ingredients to the grocery list.
       `;
 
       let finalMealPlan: any[] = [];
@@ -718,8 +723,45 @@ function generateRuleBasedMealPlan(
           return usageA - usageB; // Prefer recipes used less often
         }
 
-        // If usage count is the same, compare by score
-        return b.score - a.score;
+        // Get ingredient counts
+        const aIngredients = a.extendedIngredients?.length || 0;
+        const bIngredients = b.extendedIngredients?.length || 0;
+
+        // Get already selected recipe ingredients for overlap calculation
+        const selectedRecipeIngredients = new Set<string>();
+        for (const recipeId of Object.values(recipesUsedPerDay).flatMap(
+          (set) => [...set]
+        )) {
+          const recipe = scoredRecipes.find((r) => r.id === recipeId);
+          if (recipe && recipe.extendedIngredients) {
+            recipe.extendedIngredients.forEach((ing) => {
+              if (ing.name)
+                selectedRecipeIngredients.add(ing.name.toLowerCase());
+            });
+          }
+        }
+
+        // Calculate overlap with already selected recipes
+        const aOverlap =
+          a.extendedIngredients?.filter(
+            (ing) =>
+              ing.name && selectedRecipeIngredients.has(ing.name.toLowerCase())
+          )?.length || 0;
+
+        const bOverlap =
+          b.extendedIngredients?.filter(
+            (ing) =>
+              ing.name && selectedRecipeIngredients.has(ing.name.toLowerCase())
+          )?.length || 0;
+
+        // Calculate a combined score that prioritizes:
+        // 1. More overlap with existing recipes
+        // 2. Fewer total ingredients
+        // 3. Higher score (as calculated by scoreRecipes)
+        const aEfficiency = aOverlap * 3 - aIngredients + a.score / 10;
+        const bEfficiency = bOverlap * 3 - bIngredients + b.score / 10;
+
+        return bEfficiency - aEfficiency;
       });
 
       const selectedRecipe = availableForDay[0];
@@ -867,15 +909,27 @@ function scoreRecipes(
           ? 15 / Math.max(1, closestToExpiry) // Boost for recipes with soon-to-expire ingredients
           : 0;
 
+      // NEW: Add bonus for recipes with fewer ingredients (to reduce shopping list size)
+      const totalIngredientCount = recipeIngredients.length;
+      const fewerIngredientsBonus =
+        totalIngredientCount === 0 ? 0 : 30 / totalIngredientCount;
+
+      // NEW: Increase overlap bonus significantly to prefer recipes that reuse ingredients
+      const overlapPercentage =
+        totalIngredientCount === 0
+          ? 0
+          : overlappingCount / totalIngredientCount;
+      const overlapBonus = 20 * overlapPercentage;
+
       // Modified base score - heavily prioritize using expiring items
       const baseScore =
         (10 / Math.max(1, avgDaysLeft)) * pantryItemsUsed -
         2 * newIngredients +
         expiryUrgency -
-        repetitionPenalty;
+        repetitionPenalty +
+        fewerIngredientsBonus;
 
       // Add bonuses
-      const overlapBonus = 3 * overlappingCount;
       const favoriteBoost = isFavorite ? 5 : 0;
 
       // Calculate the final score, ensure it's at least 0
@@ -896,6 +950,9 @@ function scoreRecipes(
           avgDaysLeft,
           recipeDayCount,
           repetitionPenalty,
+          totalIngredientCount,
+          fewerIngredientsBonus,
+          overlapPercentage,
         },
         calculatedScore: {
           baseScore: parseFloat(baseScore.toFixed(2)),

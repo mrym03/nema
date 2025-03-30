@@ -1042,13 +1042,17 @@ Here's my current shopping list with ${shoppingItems.length} items:
 
 ${shoppingListContext}
 
-Please optimize this shopping list to reduce the number of different ingredients while still making it possible to cook all the planned meals. Specifically:
+Please optimize this shopping list to reduce the number of different ingredients while still making it possible to cook all the planned meals. Follow these specific rules:
 
-1. Identify similar ingredients that can be substituted (e.g., using one type of pasta for multiple dishes)
-2. For perishable items (especially vegetables and fruits), suggest using the same vegetable across multiple recipes to avoid waste
-3. Consolidate similar spices or condiments where possible
-4. Consider what a typical home cook would realistically buy and use
-5. Consider substituting ingredients that serve similar purposes in recipes (e.g. green vegetables)
+1. REMOVE all spices, herbs, salt, pepper, and common pantry staples (sugar, flour, baking powder, etc.) as most people already have these
+2. REMOVE items like water, vegetable broth, chicken broth, etc. that can be made from other ingredients or substituted with water
+3. CONSOLIDATE similar ingredients aggressively:
+   - Replace multiple cheese varieties with one versatile cheese (e.g., use mozzarella instead of having mozzarella, cheddar, provolone, etc.)
+   - Use one type of green vegetable instead of multiple similar ones
+   - Use one type of cooking oil instead of having multiple oils
+   - Substitute similar grains (use one type of rice, pasta, etc.)
+4. For perishable items, CONSOLIDATE even more aggressively to avoid waste
+5. For ingredients with similar culinary functions, choose ONE that works in multiple recipes
 
 Your response should be structured in valid JSON format that I can parse, like this:
 {
@@ -1066,7 +1070,7 @@ Your response should be structured in valid JSON format that I can parse, like t
   "substitutionRationale": "Brief explanation of the overall substitution strategy"
 }
 
-Focus on practicality - the goal is a realistic shopping list for a home cook who wants to minimize waste and grocery purchases.
+Focus on creating the MINIMUM possible number of shopping items a home cook would need to buy. Be extremely practical - the goal is to reduce waste and simplify grocery shopping.
 `;
 
       console.log("Sending shopping list optimization request to OpenAI...");
@@ -1113,7 +1117,7 @@ Focus on practicality - the goal is a realistic shopping list for a home cook wh
         // Show the user a message about the optimization
         Alert.alert(
           "Shopping List Optimized",
-          `Your shopping list has been optimized from ${shoppingItems.length} to ${optimizedItems.length} items.\n\n${optimizedData.substitutionRationale}`,
+          `Your shopping list has been optimized from ${shoppingItems.length} to ${optimizedItems.length} items.\n\nThe list has been optimized to minimize the number of items by:\n• Removing common spices and pantry staples\n• Consolidating similar ingredients\n• Replacing multiple similar items with versatile alternatives\n• Removing items like broth that can be made from other ingredients`,
           [{ text: "OK" }]
         );
 
@@ -1393,7 +1397,7 @@ Focus on practicality - the goal is a realistic shopping list for a home cook wh
       // Notification of success
       Alert.alert(
         "Shopping List Generated",
-        `Added ${optimizedShoppingItems.length} items to your shopping list`,
+        `Your shopping list has been optimized from ${initialShoppingItems.length} to ${optimizedShoppingItems.length} items.\n\nThe list has been optimized to minimize the number of items by:\n• Removing common spices and pantry staples\n• Consolidating similar ingredients\n• Replacing multiple similar items with versatile alternatives\n• Removing items like broth that can be made from other ingredients`,
         [
           {
             text: "View List",
@@ -1543,7 +1547,9 @@ Focus on practicality - the goal is a realistic shopping list for a home cook wh
                 >
                   <ShoppingCart size={18} color="#FFFFFF" />
                   <Text style={styles.optimizeButtonText}>
-                    Generate Shopping List
+                    {isGeneratingOptimizedPlan
+                      ? "Optimizing..."
+                      : "Generate Smart Shopping List"}
                   </Text>
                 </TouchableOpacity>
               )}
