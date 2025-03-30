@@ -160,99 +160,158 @@ export const useShoppingListStore = create<ShoppingListState>()(
             (ing) => ing.name || ing.originalName
           );
 
-          const newItems = validIngredients.map((ingredient) => {
-            const name =
-              ingredient.name ||
-              ingredient.originalName ||
-              "Unknown ingredient";
-
-            // Parse the amount to get a proper number
-            let quantity = 1;
-            if (ingredient.amount !== undefined) {
-              if (typeof ingredient.amount === "number") {
-                quantity = ingredient.amount;
-              } else if (typeof ingredient.amount === "string") {
-                // Try to parse the string amount
-                const parsedAmount = parseFloat(ingredient.amount);
-                if (!isNaN(parsedAmount)) {
-                  quantity = parsedAmount;
-                }
-              }
-            }
-
-            // Determine the best unit to use
-            let unit = ingredient.unit || "item";
-            // If unit is empty but we have a number, default to a reasonable unit
-            if (!unit && quantity > 0) {
-              // Common default units based on the ingredient name
-              if (
-                name.includes("milk") ||
-                name.includes("water") ||
-                name.includes("oil")
-              ) {
-                unit = "ml";
-              } else if (
-                name.includes("flour") ||
-                name.includes("sugar") ||
-                name.includes("rice")
-              ) {
-                unit = "g";
-              }
-            }
-
-            // Infer the category from the ingredient name
-            const category = inferCategoryFromIngredient(name);
-
-            return {
-              id: generateId(),
-              name,
-              category,
-              quantity,
-              unit,
-              completed: false,
-              addedAt: new Date().toISOString(),
-            };
-          });
-
-          // Check for duplicates and merge them
-          const existingItemMap = new Map(
-            state.items.map((item) => [item.name.toLowerCase(), item])
+          console.log(
+            `Processing ${validIngredients.length} valid ingredients`
           );
 
-          const itemsToAdd = [];
+          // First, group ingredients by name to combine duplicates
+          const groupedByName: Record<string, RecipeIngredient> = {};
 
-          for (const newItem of newItems) {
-            const normalizedName = newItem.name.toLowerCase();
-            const existingItem = existingItemMap.get(normalizedName);
+          validIngredients.forEach((ingredient) => {
+            const name = (
+              ingredient.name ||
+              ingredient.originalName ||
+              "Unknown ingredient"
+            ).toLowerCase();
 
-            if (existingItem) {
-              // Update the existing item instead of adding a new one
-              existingItemMap.set(normalizedName, {
-                ...existingItem,
-                quantity: existingItem.quantity + newItem.quantity,
-                // Keep the existing unit if they match, otherwise note both
-                unit:
-                  existingItem.unit === newItem.unit
-                    ? existingItem.unit
-                    : `${existingItem.unit}/${newItem.unit}`,
-              });
-            } else {
-              // Add as a new item
-              itemsToAdd.push(newItem);
-              existingItemMap.set(normalizedName, newItem);
+            if (!groupedByName[name]) {
+              groupedByName[name] = { ...ingredient };
+            } else if (
+              groupedByName[name].amount &&
+              ingredient.amount &&
+              groupedByName[name].unit === ingredient.unit
+            ) {
+              // If same unit, add quantities
+              groupedByName[name].amount =
+                Number(groupedByName[name].amount) + Number(ingredient.amount);
+
+              // Merge the recipe names if available
+              if (ingredient.recipeName && groupedByName[name].recipeName) {
+                if (
+                  !groupedByName[name].recipeName.includes(
+                    ingredient.recipeName
+                  )
+                ) {
+                  groupedByName[
+                    name
+                  ].recipeName += `, ${ingredient.recipeName}`;
+                }
+              } else if (ingredient.recipeName) {
+                groupedByName[name].recipeName = ingredient.recipeName;
+              }
             }
-          }
+            // If different units, keep them separate for now
+          });
+
+          // Now create shopping list items from the grouped ingredients
+          const newItems: ShoppingListItem[] = Object.values(groupedByName).map(
+            (ingredient) => {
+              const name =
+                ingredient.name ||
+                ingredient.originalName ||
+                "Unknown ingredient";
+
+              console.log(`Processing ingredient: ${name}`);
+
+              // Parse the amount to get a proper number
+              let quantity = 1;
+              if (ingredient.amount !== undefined) {
+                if (typeof ingredient.amount === "number") {
+                  quantity = ingredient.amount;
+                } else if (typeof ingredient.amount === "string") {
+                  // Try to parse the string amount
+                  const parsedAmount = parseFloat(ingredient.amount);
+                  if (!isNaN(parsedAmount)) {
+                    quantity = parsedAmount;
+                  }
+                }
+              }
+
+              // Ensure quantity is at least 1
+              quantity = Math.max(1, quantity);
+
+              // Determine the best unit to use
+              let unit = ingredient.unit || "item";
+              // If unit is empty but we have a number, default to a reasonable unit
+              if (!unit && quantity > 0) {
+                // Common default units based on the ingredient name
+                if (
+                  name.includes("milk") ||
+                  name.includes("water") ||
+                  name.includes("oil")
+                ) {
+                  unit = "ml";
+                } else if (
+                  name.includes("flour") ||
+                  name.includes("sugar") ||
+                  name.includes("rice")
+                ) {
+                  unit = "g";
+                }
+              }
+
+              // Get the recipe name if available
+              const recipes = [];
+              if (ingredient.recipeName) {
+                recipes.push(ingredient.recipeName);
+              }
+
+              // First use the provided category if available, otherwise infer from name
+              const category =
+                ingredient.category || inferCategoryFromIngredient(name);
+
+              return {
+                id: generateId(),
+                name,
+                category,
+                quantity,
+                unit,
+                completed: false,
+                addedAt: new Date().toISOString(),
+                recipes: recipes.length > 0 ? recipes : undefined,
+              };
+            }
+          );
+
+          // For debugging
+          console.log(`Created ${newItems.length} shopping list items`);
+
+          // Check for existing items with the same name and combine them
+          const updatedItems = [...state.items];
+          const newItemsToAdd: ShoppingListItem[] = [];
+
+          newItems.forEach((newItem) => {
+            const existingIndex = updatedItems.findIndex(
+              (item) => item.name.toLowerCase() === newItem.name.toLowerCase()
+            );
+
+            if (existingIndex >= 0) {
+              const existing = updatedItems[existingIndex];
+              // If the units match, add quantities
+              if (existing.unit === newItem.unit) {
+                updatedItems[existingIndex] = {
+                  ...existing,
+                  quantity: existing.quantity + newItem.quantity,
+                  // Merge recipes arrays without duplicates
+                  recipes: [
+                    ...new Set([
+                      ...(existing.recipes || []),
+                      ...(newItem.recipes || []),
+                    ]),
+                  ],
+                };
+              } else {
+                // If units don't match, add as new item
+                newItemsToAdd.push(newItem);
+              }
+            } else {
+              // Add as new item
+              newItemsToAdd.push(newItem);
+            }
+          });
 
           return {
-            items: [
-              ...state.items.map((item) => {
-                const updatedItem = existingItemMap.get(
-                  item.name.toLowerCase()
-                );
-                return updatedItem || item;
-              }),
-              ...itemsToAdd,
-            ],
+            items: [...updatedItems, ...newItemsToAdd],
           };
         });
       },

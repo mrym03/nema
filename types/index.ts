@@ -58,6 +58,8 @@ export interface RecipeIngredient {
   unit?: string;
   aisle?: string;
   original?: string;
+  recipeName?: string; // Add recipe name to track where ingredient came from
+  category?: FoodCategory; // Add category field for better organization
 }
 
 export interface ShoppingListItem {
@@ -68,4 +70,5 @@ export interface ShoppingListItem {
   unit: string;
   completed: boolean;
   addedAt: string; // ISO string
+  recipes?: string[]; // Track which recipes an ingredient is used in
 }

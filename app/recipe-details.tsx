@@ -120,279 +120,267 @@ export default function RecipeDetailsScreen() {
     loadRecipeDetails();
   }, [id]);
 
-  // Add Stack configuration
-  return (
-    <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTransparent: true,
-          headerTitle: "",
-          headerTintColor: "#fff",
-          headerShadowVisible: false,
-          headerLeft: () => (
-            <Pressable
-              style={styles.backButton}
-              onPress={() => router.back()}
-            >
-              <ArrowLeft size={24} color="#fff" />
-            </Pressable>
-          ),
-        }}
-      />
-      {renderContent()}
-    </>
-  );
-  
-  function renderContent() {
-    if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading recipe details...</Text>
-        </View>
-      );
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Loading recipe details...</Text>
+      </View>
+    );
+  }
+
+  if (error || !recipe) {
+    return (
+      <View style={styles.notFound}>
+        <Text style={styles.notFoundText}>{error || "Recipe not found"}</Text>
+        <PrimaryButton
+          title="Go Back"
+          onPress={() => router.back()}
+          width={150}
+        />
+      </View>
+    );
+  }
+
+  // Organize ingredients into available and missing
+  const getAvailableAndMissingIngredients = () => {
+    if (!recipe.extendedIngredients) return { available: [], missing: [] };
+
+    // Create lookup of pantry item names (lowercase for case-insensitive matching)
+    const pantryItemNames = new Set(
+      pantryItems.map((item) => item.name.toLowerCase())
+    );
+
+    const available = [];
+    const missing = [];
+
+    for (const ingredient of recipe.extendedIngredients) {
+      // Try to match ingredient with pantry items
+      const name = ingredient.name || ingredient.originalName || "";
+      if (
+        pantryItemNames.has(name.toLowerCase()) ||
+        pantryItems.some((item) =>
+          name.toLowerCase().includes(item.name.toLowerCase())
+        )
+      ) {
+        available.push(ingredient);
+      } else {
+        missing.push(ingredient);
+      }
     }
 
-    if (error || !recipe) {
-      return (
-        <View style={styles.notFound}>
-          <Text style={styles.notFoundText}>{error || "Recipe not found"}</Text>
-          <PrimaryButton
-            title="Go Back"
-            onPress={() => router.back()}
-            width={150}
-          />
-        </View>
-      );
+    return { available, missing };
+  };
+
+  const { available, missing } = getAvailableAndMissingIngredients();
+
+  const handleOpenRecipe = async () => {
+    if (!recipe.sourceUrl) {
+      return;
     }
 
-    // Organize ingredients into available and missing
-    const getAvailableAndMissingIngredients = () => {
-      if (!recipe.extendedIngredients) return { available: [], missing: [] };
+    try {
+      await WebBrowser.openBrowserAsync(recipe.sourceUrl);
+    } catch (error) {
+      console.error("Error opening browser:", error);
+      // Fallback to basic linking
+      Linking.openURL(recipe.sourceUrl);
+    }
+  };
 
-      // Create lookup of pantry item names (lowercase for case-insensitive matching)
-      const pantryItemNames = new Set(
-        pantryItems.map((item) => item.name.toLowerCase())
+  const handleCookRecipe = () => {
+    if (available.length === 0) {
+      Alert.alert(
+        "No Ingredients Available",
+        "You don't have any of the required ingredients in your pantry."
       );
+      return;
+    }
 
-      const available = [];
-      const missing = [];
+    setIsCooking(true);
 
-      for (const ingredient of recipe.extendedIngredients) {
-        // Try to match ingredient with pantry items
-        const name = ingredient.name || ingredient.originalName || "";
-        if (
-          pantryItemNames.has(name.toLowerCase()) ||
-          pantryItems.some((item) =>
-            name.toLowerCase().includes(item.name.toLowerCase())
-          )
-        ) {
-          available.push(ingredient);
-        } else {
-          missing.push(ingredient);
-        }
-      }
+    // Find the pantry items that match the available ingredients
+    const ingredientIds: string[] = [];
+    const usedItems: FoodItem[] = [];
+    const usedItemNames: string[] = [];
+    const usedQuantities: { [id: string]: number } = {};
 
-      return { available, missing };
-    };
-
-    const { available, missing } = getAvailableAndMissingIngredients();
-
-    const handleOpenRecipe = async () => {
-      if (!recipe.sourceUrl) {
-        return;
-      }
-
-      try {
-        await WebBrowser.openBrowserAsync(recipe.sourceUrl);
-      } catch (error) {
-        console.error("Error opening browser:", error);
-        // Fallback to basic linking
-        Linking.openURL(recipe.sourceUrl);
-      }
-    };
-
-    const handleCookRecipe = () => {
-      if (available.length === 0) {
-        Alert.alert(
-          "No Ingredients Available",
-          "You don't have any of the required ingredients in your pantry."
+    pantryItems.forEach((item) => {
+      // Check if this pantry item is used in any of the available ingredients
+      const matchingIngredient = available.find((ingredient) => {
+        const ingredientName = (
+          ingredient.name ||
+          ingredient.originalName ||
+          ""
+        ).toLowerCase();
+        return (
+          ingredientName.includes(item.name.toLowerCase()) ||
+          item.name.toLowerCase().includes(ingredientName)
         );
-        return;
-      }
-
-      setIsCooking(true);
-
-      // Find the pantry items that match the available ingredients
-      const ingredientIds: string[] = [];
-      const usedItems: FoodItem[] = [];
-      const usedItemNames: string[] = [];
-      const usedQuantities: { [id: string]: number } = {};
-
-      pantryItems.forEach((item) => {
-        // Check if this pantry item is used in any of the available ingredients
-        const matchingIngredient = available.find((ingredient) => {
-          const ingredientName = (
-            ingredient.name ||
-            ingredient.originalName ||
-            ""
-          ).toLowerCase();
-          return (
-            ingredientName.includes(item.name.toLowerCase()) ||
-            item.name.toLowerCase().includes(ingredientName)
-          );
-        });
-
-        if (matchingIngredient) {
-          ingredientIds.push(item.id);
-          usedItems.push(item);
-
-          // Get the amount used from the recipe
-          const amountInRecipe =
-            matchingIngredient.amount && !isNaN(matchingIngredient.amount)
-              ? matchingIngredient.amount
-              : 1;
-
-          // Save the amount used for display
-          usedQuantities[item.id] = Math.min(amountInRecipe, item.quantity);
-
-          // Format name with quantity for display
-          const formattedName = `${item.name} (${usedQuantities[item.id]} ${
-            item.unit || "item"
-          }${
-            usedQuantities[item.id] > 1 &&
-            !["kg", "g", "ml", "l"].includes(item.unit || "")
-              ? "s"
-              : ""
-          })`;
-          usedItemNames.push(formattedName);
-        }
       });
 
-      // Mark the ingredients as opened and update quantities
-      const updatedItems = markIngredientsAsOpened(ingredientIds, available);
+      if (matchingIngredient) {
+        ingredientIds.push(item.id);
+        usedItems.push(item);
 
-      // Calculate sustainability impact
-      const impact = calculateSustainabilityImpact(usedItems);
-      setSustainability(impact);
+        // Get the amount used from the recipe
+        const amountInRecipe =
+          matchingIngredient.amount && !isNaN(matchingIngredient.amount)
+            ? matchingIngredient.amount
+            : 1;
 
-      // Create a nicely formatted list of used ingredients
-      const ingredientsList = usedItemNames.join("\n• ");
+        // Save the amount used for display
+        usedQuantities[item.id] = Math.min(amountInRecipe, item.quantity);
 
-      // Show success message without detailed metrics
-      setTimeout(() => {
-        setIsCooking(false);
-        setCookingComplete(true);
-
-        Alert.alert(
-          "Recipe Cooked!",
-          `You used the following ingredients from your pantry:\n\n• ${ingredientsList}\n\nThese items have been marked as opened or quantities have been updated.`,
-          [{ text: "Great!" }]
-        );
-      }, 1500);
-    };
-
-    const handleAddToMealPlan = () => {
-      toggleRecipeSelection(recipe);
-      setRecipeAdded(!recipeAdded);
-
-      if (!recipeAdded) {
-        Alert.alert(
-          "Recipe Added",
-          "Recipe has been added to your meal planning selection. Go to the Meal Plan tab to organize your weekly meals.",
-          [
-            {
-              text: "View Meal Plan",
-              onPress: () => router.push("/(tabs)/meal-plan"),
-            },
-            { text: "Continue Browsing", style: "cancel" },
-          ]
-        );
+        // Format name with quantity for display
+        const formattedName = `${item.name} (${usedQuantities[item.id]} ${
+          item.unit || "item"
+        }${
+          usedQuantities[item.id] > 1 &&
+          !["kg", "g", "ml", "l"].includes(item.unit || "")
+            ? "s"
+            : ""
+        })`;
+        usedItemNames.push(formattedName);
       }
-    };
+    });
 
-    // Add a new function to handle adding missing ingredients to the shopping list
-    const handleAddToShoppingList = () => {
-      if (
-        !recipe.extendedIngredients ||
-        recipe.extendedIngredients.length === 0
-      ) {
-        Alert.alert(
-          "No Ingredients",
-          "This recipe doesn't have any ingredients to add."
-        );
-        return;
-      }
+    // Mark the ingredients as opened and update quantities
+    const updatedItems = markIngredientsAsOpened(ingredientIds, available);
 
-      const { missing } = getAvailableAndMissingIngredients();
+    // Calculate sustainability impact
+    const impact = calculateSustainabilityImpact(usedItems);
+    setSustainability(impact);
 
-      if (missing.length === 0) {
-        Alert.alert(
-          "All Ingredients Available",
-          "You already have all the ingredients for this recipe in your pantry!"
-        );
-        return;
-      }
+    // Create a nicely formatted list of used ingredients
+    const ingredientsList = usedItemNames.join("\n• ");
 
-      // Add the missing ingredients to the shopping list
-      addRecipeIngredients(missing);
-      setAddedToShoppingList(true);
+    // Show success message without detailed metrics
+    setTimeout(() => {
+      setIsCooking(false);
+      setCookingComplete(true);
 
-      // Show a success message with the option to view the shopping list
       Alert.alert(
-        "Added to Shopping List",
-        `${missing.length} ingredient${
-          missing.length !== 1 ? "s" : ""
-        } added to your shopping list.`,
+        "Recipe Cooked!",
+        `You used the following ingredients from your pantry:\n\n• ${ingredientsList}\n\nThese items have been marked as opened or quantities have been updated.`,
+        [{ text: "Great!" }]
+      );
+    }, 1500);
+  };
+
+  const handleAddToMealPlan = () => {
+    toggleRecipeSelection(recipe);
+    setRecipeAdded(!recipeAdded);
+
+    if (!recipeAdded) {
+      Alert.alert(
+        "Recipe Added",
+        "Recipe has been added to your meal planning selection. Go to the Meal Plan tab to organize your weekly meals.",
         [
           {
-            text: "View Shopping List",
-            onPress: () => router.push("/(tabs)/shopping-list"),
+            text: "View Meal Plan",
+            onPress: () => router.push("/(tabs)/meal-plan"),
           },
           { text: "Continue Browsing", style: "cancel" },
         ]
       );
-    };
+    }
+  };
 
-    // Clean up HTML content for display
-    const cleanSummary = recipe.summary
-      ? recipe.summary.replace(
-          /<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g,
-          "$2"
-        )
-      : "No summary available for this recipe.";
+  // Add a new function to handle adding missing ingredients to the shopping list
+  const handleAddToShoppingList = () => {
+    if (
+      !recipe.extendedIngredients ||
+      recipe.extendedIngredients.length === 0
+    ) {
+      Alert.alert(
+        "No Ingredients",
+        "This recipe doesn't have any ingredients to add."
+      );
+      return;
+    }
 
-    // Clean up instructions for display
-    const cleanInstructions = recipe.instructions
-      ? recipe.instructions.replace(
-          /<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g,
-          "$2"
-        )
-      : "No detailed instructions available for this recipe. Please view the full recipe on the source website.";
+    const { missing } = getAvailableAndMissingIngredients();
 
-    // Determine if we should use LinearGradient or fallback to a regular view
-    const shouldUseGradient = LinearGradient !== View;
+    if (missing.length === 0) {
+      Alert.alert(
+        "All Ingredients Available",
+        "You already have all the ingredients for this recipe in your pantry!"
+      );
+      return;
+    }
 
-    const GradientComponent = shouldUseGradient ? LinearGradient : View;
+    // Add recipe name to each missing ingredient before adding to shopping list
+    const ingredientsWithRecipe = missing.map((ing) => ({
+      ...ing,
+      recipeName: recipe.title,
+    }));
 
-    const headerGradientProps = shouldUseGradient
-      ? {
-          colors: [
-            "rgba(0,0,0,0.7)",
-            "rgba(0,0,0,0.5)",
-            "rgba(0,0,0,0.3)",
-            "transparent",
-          ],
-          start: { x: 0, y: 0 },
-          end: { x: 0, y: 1 },
-          style: styles.imageGradient,
-        }
-      : {
-          style: [styles.imageGradient, { backgroundColor: "rgba(0,0,0,0.5)" }],
-        };
+    // Add the missing ingredients to the shopping list
+    addRecipeIngredients(ingredientsWithRecipe);
+    setAddedToShoppingList(true);
 
-    return (
+    // Show a success message with the option to view the shopping list
+    Alert.alert(
+      "Added to Shopping List",
+      `${missing.length} ingredient${
+        missing.length !== 1 ? "s" : ""
+      } added to your shopping list.`,
+      [
+        {
+          text: "View Shopping List",
+          onPress: () => router.push("/(tabs)/shopping-list"),
+        },
+        { text: "Continue Browsing", style: "cancel" },
+      ]
+    );
+  };
+
+  // Clean up HTML content for display
+  const cleanSummary = recipe.summary
+    ? recipe.summary.replace(
+        /<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g,
+        "$2"
+      )
+    : "No summary available for this recipe.";
+
+  // Clean up instructions for display
+  const cleanInstructions = recipe.instructions
+    ? recipe.instructions.replace(
+        /<a\s+(?:[^>]*?\s+)?href="([^"]*)"[^>]*>(.*?)<\/a>/g,
+        "$2"
+      )
+    : "No detailed instructions available for this recipe. Please view the full recipe on the source website.";
+
+  // Determine if we should use LinearGradient or fallback to a regular view
+  const shouldUseGradient = LinearGradient !== View;
+
+  const GradientComponent = shouldUseGradient ? LinearGradient : View;
+
+  const headerGradientProps = shouldUseGradient
+    ? {
+        colors: [
+          "rgba(0,0,0,0.7)",
+          "rgba(0,0,0,0.5)",
+          "rgba(0,0,0,0.3)",
+          "transparent",
+        ],
+        start: { x: 0, y: 0 },
+        end: { x: 0, y: 1 },
+        style: styles.imageGradient,
+      }
+    : {
+        style: [styles.imageGradient, { backgroundColor: "rgba(0,0,0,0.5)" }],
+      };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: false,
+        }}
+      />
+
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -633,8 +621,8 @@ export default function RecipeDetailsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    );
-  }
+    </>
+  );
 }
 
 const htmlStyles = StyleSheet.create({
@@ -698,13 +686,13 @@ const styles = StyleSheet.create({
     height: 150,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    position: "absolute",
+    top: 16,
+    left: 16,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    padding: 10,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
+    zIndex: 10,
   },
   titleContainer: {
     position: "absolute",
