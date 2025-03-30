@@ -16,6 +16,7 @@ import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { useRecipeStore } from "@/store/recipeStore";
 import { usePantryStore } from "@/store/pantryStore";
+import { useShoppingListStore } from "@/store/shoppingListStore";
 import Colors from "@/constants/colors";
 import {
   Clock,
@@ -31,12 +32,16 @@ import {
   CookingPot,
   PlayCircle,
   Calendar,
+  Plus,
 } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as Animatable from "react-native-animatable";
 import CardContainer from "@/components/CardContainer";
 import PrimaryButton from "@/components/PrimaryButton";
-import { markIngredientsAsOpened, calculateSustainabilityImpact } from "@/utils/recipeFunctions";
+import {
+  markIngredientsAsOpened,
+  calculateSustainabilityImpact,
+} from "@/utils/recipeFunctions";
 import { FoodItem } from "@/types";
 
 // Try to import HTMLView, with a fallback to our simple HTML stripper if not available
@@ -79,8 +84,10 @@ try {
 export default function RecipeDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getRecipeById, toggleRecipeSelection, isRecipeSelected } = useRecipeStore();
+  const { getRecipeById, toggleRecipeSelection, isRecipeSelected } =
+    useRecipeStore();
   const { items: pantryItems } = usePantryStore();
+  const { addRecipeIngredients } = useShoppingListStore();
   const [recipe, setRecipe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +100,7 @@ export default function RecipeDetailsScreen() {
     percentOfAnnualWaste: number;
   } | null>(null);
   const [recipeAdded, setRecipeAdded] = useState(false);
+  const [addedToShoppingList, setAddedToShoppingList] = useState(false);
 
   useEffect(() => {
     const loadRecipeDetails = async () => {
@@ -137,26 +145,30 @@ export default function RecipeDetailsScreen() {
   // Organize ingredients into available and missing
   const getAvailableAndMissingIngredients = () => {
     if (!recipe.extendedIngredients) return { available: [], missing: [] };
-    
+
     // Create lookup of pantry item names (lowercase for case-insensitive matching)
     const pantryItemNames = new Set(
-      pantryItems.map(item => item.name.toLowerCase())
+      pantryItems.map((item) => item.name.toLowerCase())
     );
-    
+
     const available = [];
     const missing = [];
-    
+
     for (const ingredient of recipe.extendedIngredients) {
       // Try to match ingredient with pantry items
-      const name = ingredient.name || ingredient.originalName || '';
-      if (pantryItemNames.has(name.toLowerCase()) || 
-          pantryItems.some(item => name.toLowerCase().includes(item.name.toLowerCase()))) {
+      const name = ingredient.name || ingredient.originalName || "";
+      if (
+        pantryItemNames.has(name.toLowerCase()) ||
+        pantryItems.some((item) =>
+          name.toLowerCase().includes(item.name.toLowerCase())
+        )
+      ) {
         available.push(ingredient);
       } else {
         missing.push(ingredient);
       }
     }
-    
+
     return { available, missing };
   };
 
@@ -191,30 +203,44 @@ export default function RecipeDetailsScreen() {
     const ingredientIds: string[] = [];
     const usedItems: FoodItem[] = [];
     const usedItemNames: string[] = [];
-    const usedQuantities: {[id: string]: number} = {};
+    const usedQuantities: { [id: string]: number } = {};
 
-    pantryItems.forEach(item => {
+    pantryItems.forEach((item) => {
       // Check if this pantry item is used in any of the available ingredients
-      const matchingIngredient = available.find(ingredient => {
-        const ingredientName = (ingredient.name || ingredient.originalName || '').toLowerCase();
-        return ingredientName.includes(item.name.toLowerCase()) || 
-               item.name.toLowerCase().includes(ingredientName);
+      const matchingIngredient = available.find((ingredient) => {
+        const ingredientName = (
+          ingredient.name ||
+          ingredient.originalName ||
+          ""
+        ).toLowerCase();
+        return (
+          ingredientName.includes(item.name.toLowerCase()) ||
+          item.name.toLowerCase().includes(ingredientName)
+        );
       });
 
       if (matchingIngredient) {
         ingredientIds.push(item.id);
         usedItems.push(item);
-        
+
         // Get the amount used from the recipe
-        const amountInRecipe = matchingIngredient.amount && !isNaN(matchingIngredient.amount) 
-          ? matchingIngredient.amount 
-          : 1;
-          
-        // Save the amount used for display  
+        const amountInRecipe =
+          matchingIngredient.amount && !isNaN(matchingIngredient.amount)
+            ? matchingIngredient.amount
+            : 1;
+
+        // Save the amount used for display
         usedQuantities[item.id] = Math.min(amountInRecipe, item.quantity);
-        
+
         // Format name with quantity for display
-        const formattedName = `${item.name} (${usedQuantities[item.id]} ${item.unit || 'item'}${usedQuantities[item.id] > 1 && !['kg', 'g', 'ml', 'l'].includes(item.unit || '') ? 's' : ''})`;
+        const formattedName = `${item.name} (${usedQuantities[item.id]} ${
+          item.unit || "item"
+        }${
+          usedQuantities[item.id] > 1 &&
+          !["kg", "g", "ml", "l"].includes(item.unit || "")
+            ? "s"
+            : ""
+        })`;
         usedItemNames.push(formattedName);
       }
     });
@@ -227,13 +253,13 @@ export default function RecipeDetailsScreen() {
     setSustainability(impact);
 
     // Create a nicely formatted list of used ingredients
-    const ingredientsList = usedItemNames.join('\n• ');
+    const ingredientsList = usedItemNames.join("\n• ");
 
     // Show success message without detailed metrics
     setTimeout(() => {
       setIsCooking(false);
       setCookingComplete(true);
-      
+
       Alert.alert(
         "Recipe Cooked!",
         `You used the following ingredients from your pantry:\n\n• ${ingredientsList}\n\nThese items have been marked as opened or quantities have been updated.`,
@@ -245,17 +271,63 @@ export default function RecipeDetailsScreen() {
   const handleAddToMealPlan = () => {
     toggleRecipeSelection(recipe);
     setRecipeAdded(!recipeAdded);
-    
+
     if (!recipeAdded) {
       Alert.alert(
-        "Recipe Added", 
+        "Recipe Added",
         "Recipe has been added to your meal planning selection. Go to the Meal Plan tab to organize your weekly meals.",
         [
-          { text: "View Meal Plan", onPress: () => router.push("/(tabs)/meal-plan") },
-          { text: "Continue Browsing", style: "cancel" }
+          {
+            text: "View Meal Plan",
+            onPress: () => router.push("/(tabs)/meal-plan"),
+          },
+          { text: "Continue Browsing", style: "cancel" },
         ]
       );
     }
+  };
+
+  // Add a new function to handle adding missing ingredients to the shopping list
+  const handleAddToShoppingList = () => {
+    if (
+      !recipe.extendedIngredients ||
+      recipe.extendedIngredients.length === 0
+    ) {
+      Alert.alert(
+        "No Ingredients",
+        "This recipe doesn't have any ingredients to add."
+      );
+      return;
+    }
+
+    const { missing } = getAvailableAndMissingIngredients();
+
+    if (missing.length === 0) {
+      Alert.alert(
+        "All Ingredients Available",
+        "You already have all the ingredients for this recipe in your pantry!"
+      );
+      return;
+    }
+
+    // Add the missing ingredients to the shopping list
+    addRecipeIngredients(missing);
+    setAddedToShoppingList(true);
+
+    // Show a success message with the option to view the shopping list
+    Alert.alert(
+      "Added to Shopping List",
+      `${missing.length} ingredient${
+        missing.length !== 1 ? "s" : ""
+      } added to your shopping list.`,
+      [
+        {
+          text: "View Shopping List",
+          onPress: () => router.push("/(tabs)/shopping-list"),
+        },
+        { text: "Continue Browsing", style: "cancel" },
+      ]
+    );
   };
 
   // Clean up HTML content for display
@@ -265,7 +337,7 @@ export default function RecipeDetailsScreen() {
         "$2"
       )
     : "No summary available for this recipe.";
-    
+
   // Clean up instructions for display
   const cleanInstructions = recipe.instructions
     ? recipe.instructions.replace(
@@ -383,7 +455,7 @@ export default function RecipeDetailsScreen() {
                   <GripHorizontal size={20} color={Colors.primary} />
                   <Text style={styles.sectionTitle}>Ingredients</Text>
                 </View>
-                
+
                 <View style={styles.ingredientsInfo}>
                   <View style={styles.ingredientRow}>
                     <View style={styles.checkIconContainer}>
@@ -412,39 +484,67 @@ export default function RecipeDetailsScreen() {
                       </Text>
                     </View>
                   )}
+
+                  {/* Add shopping list button if there are missing ingredients */}
+                  {missing.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.addToShoppingListButton}
+                      onPress={handleAddToShoppingList}
+                      disabled={addedToShoppingList}
+                    >
+                      <ShoppingCart size={16} color="#FFFFFF" />
+                      <Text style={styles.addToShoppingListText}>
+                        {addedToShoppingList
+                          ? "Added to Shopping List"
+                          : "Add Missing Ingredients to Shopping List"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                
+
                 {/* Available ingredients list */}
                 {available.length > 0 && (
                   <View style={styles.detailedIngredients}>
-                    <Text style={styles.ingredientSubheading}>Available in your pantry:</Text>
+                    <Text style={styles.ingredientSubheading}>
+                      Available in your pantry:
+                    </Text>
                     {available.map((ingredient, index) => (
-                      <View key={`available-${index}`} style={styles.detailedIngredientRow}>
+                      <View
+                        key={`available-${index}`}
+                        style={styles.detailedIngredientRow}
+                      >
                         <View style={styles.bulletPoint}>
                           <Check size={14} color={Colors.success} />
                         </View>
                         <Text style={styles.detailedIngredientText}>
-                          {ingredient.amount && !isNaN(ingredient.amount) ? 
-                            `${ingredient.amount} ${ingredient.unit || ''} ` : ''}
+                          {ingredient.amount && !isNaN(ingredient.amount)
+                            ? `${ingredient.amount} ${ingredient.unit || ""} `
+                            : ""}
                           {ingredient.name || ingredient.originalName}
                         </Text>
                       </View>
                     ))}
                   </View>
                 )}
-                
+
                 {/* Missing ingredients list */}
                 {missing.length > 0 && (
                   <View style={styles.detailedIngredients}>
-                    <Text style={styles.ingredientSubheading}>Ingredients to buy:</Text>
+                    <Text style={styles.ingredientSubheading}>
+                      Ingredients to buy:
+                    </Text>
                     {missing.map((ingredient, index) => (
-                      <View key={`missing-${index}`} style={styles.detailedIngredientRow}>
+                      <View
+                        key={`missing-${index}`}
+                        style={styles.detailedIngredientRow}
+                      >
                         <View style={styles.bulletPoint}>
                           <ShoppingCart size={14} color={Colors.danger} />
                         </View>
                         <Text style={styles.detailedIngredientText}>
-                          {ingredient.amount && !isNaN(ingredient.amount) ? 
-                            `${ingredient.amount} ${ingredient.unit || ''} ` : ''}
+                          {ingredient.amount && !isNaN(ingredient.amount)
+                            ? `${ingredient.amount} ${ingredient.unit || ""} `
+                            : ""}
                           {ingredient.name || ingredient.originalName}
                         </Text>
                       </View>
@@ -462,11 +562,14 @@ export default function RecipeDetailsScreen() {
                 <HTMLText html={cleanSummary} />
               </CardContainer>
             </Animatable.View>
-            
+
             {/* Instructions section */}
             {recipe.instructions && (
               <Animatable.View animation="fadeInUp" duration={600} delay={350}>
-                <CardContainer style={styles.instructionsContainer} elevation="medium">
+                <CardContainer
+                  style={styles.instructionsContainer}
+                  elevation="medium"
+                >
                   <View style={styles.sectionTitleRow}>
                     <ChefHat size={20} color={Colors.primary} />
                     <Text style={styles.sectionTitle}>Instructions</Text>
@@ -487,10 +590,16 @@ export default function RecipeDetailsScreen() {
                   <PrimaryButton
                     title={recipeAdded ? "Added to Plan" : "Add to Meal Plan"}
                     onPress={handleAddToMealPlan}
-                    icon={recipeAdded ? <Check size={20} color={Colors.success} /> : <Calendar size={20} color="#FFFFFF" />}
+                    icon={
+                      recipeAdded ? (
+                        <Check size={20} color={Colors.success} />
+                      ) : (
+                        <Calendar size={20} color="#FFFFFF" />
+                      )
+                    }
                   />
                 </View>
-                
+
                 <View style={styles.buttonHalf}>
                   <PrimaryButton
                     title={cookingComplete ? "Cooked!" : "Cook Now"}
@@ -647,8 +756,8 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 12,
     gap: 8,
   },
@@ -704,7 +813,7 @@ const styles = StyleSheet.create({
   bulletPoint: {
     width: 20,
     marginRight: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   detailedIngredientText: {
     fontSize: 15,
@@ -728,11 +837,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   buttonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
   },
   buttonHalf: {
-    width: '48%',
+    width: "48%",
   },
   buttonSuccess: {
     backgroundColor: Colors.success,
@@ -752,5 +861,21 @@ const styles = StyleSheet.create({
   sustainabilityText: {
     fontSize: 16,
     color: Colors.text,
+  },
+  addToShoppingListButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  addToShoppingListText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    marginLeft: 8,
+    fontSize: 14,
   },
 });
