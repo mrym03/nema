@@ -125,12 +125,14 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
     const cachedDetails = get().cachedRecipeDetails[id];
 
     if (cachedDetails) {
+      console.log(`Using cached details for recipe ${id}`);
       return cachedDetails;
     }
 
     if (recipeFromState) {
       try {
         // Try to get more detailed information
+        console.log(`Fetching detailed information for recipe ${id}`);
         const detailedRecipe = await getRecipeDetails(id);
 
         // Merge with what we know about used/missed ingredients
@@ -149,11 +151,19 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
         }));
 
         return enhancedRecipe;
-      } catch (error) {
-        console.error("Error fetching detailed recipe:", error);
+      } catch (error: any) {
+        // Check if this is a rate limit error
+        const isRateLimit = error.message && error.message.includes('Rate limit exceeded');
+        
+        if (isRateLimit) {
+          console.log(`Rate limit hit for recipe ${id}, using basic recipe information`);
+          // Don't show error message to user for rate limits
+          // Just use the basic recipe we already have
+        } else {
+          console.error("Error fetching detailed recipe:", error);
+        }
 
-        // Also cache the basic recipe when we can't get details
-        // This prevents repeated failed API calls for the same recipe
+        // Either way, cache what we have to prevent further API calls
         set((state) => ({
           cachedRecipeDetails: {
             ...state.cachedRecipeDetails,
@@ -161,7 +171,7 @@ export const useRecipeStore = create<RecipeState>((set, get) => ({
           },
         }));
 
-        // If we can't get details, return what we have
+        // Return what we have without showing an error
         return recipeFromState;
       }
     }
