@@ -178,10 +178,14 @@ const CategoryPickerItem = ({
               />
             </View>
             
-            <Text style={[
-              styles.categoryName,
-              isSelected && styles.selectedText
-            ]}>
+            <Text 
+              style={[
+                styles.categoryName,
+                isSelected && styles.selectedText
+              ]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
               {category.label}
             </Text>
           </View>
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 12,
-    width: 88,
+    width: 100,
   },
   iconContainer: {
     width: 46,
@@ -270,6 +274,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text,
     textAlign: 'center',
+    width: '100%',
   },
   selectedText: {
     color: '#FFFFFF',
