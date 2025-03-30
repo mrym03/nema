@@ -310,8 +310,14 @@ export default function RecipeDetailsScreen() {
       return;
     }
 
+    // Add recipe name to each missing ingredient before adding to shopping list
+    const ingredientsWithRecipe = missing.map((ing) => ({
+      ...ing,
+      recipeName: recipe.title,
+    }));
+
     // Add the missing ingredients to the shopping list
-    addRecipeIngredients(missing);
+    addRecipeIngredients(ingredientsWithRecipe);
     setAddedToShoppingList(true);
 
     // Show a success message with the option to view the shopping list

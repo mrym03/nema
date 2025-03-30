@@ -42,6 +42,20 @@ import { Recipe, RecipeIngredient } from "@/types";
 import { usePantryStore } from "@/store/pantryStore";
 import { useShoppingListStore } from "@/store/shoppingListStore";
 import EmptyState from "@/components/EmptyState";
+import { enhanceRecipeIngredients } from "@/utils/openaiHelper";
+import { generateId } from "@/utils/helpers";
+
+// Define the FoodCategory type
+type FoodCategory =
+  | "fruits"
+  | "vegetables"
+  | "meat"
+  | "seafood"
+  | "dairy"
+  | "grains"
+  | "condiments"
+  | "spices"
+  | "other";
 
 // Define a type for recipes with score and analysis information
 interface ScoredRecipe extends Recipe {
@@ -983,8 +997,98 @@ export default function MealPlanScreen() {
     );
   };
 
+  // Helper function to categorize ingredients based on their names
+  const categorizeIngredient = (ingredientName: string): FoodCategory => {
+    const name = ingredientName.toLowerCase();
+
+    // Fruits category
+    if (
+      name.includes("fruit") ||
+      /apple|banana|orange|berry|berries|grape|melon|pear|peach|mango|pineapple|cherry|lemon|lime|avocado/.test(
+        name
+      )
+    ) {
+      return "fruits";
+    }
+
+    // Vegetables category
+    if (
+      name.includes("vegetable") ||
+      /carrot|potato|onion|garlic|pepper|tomato|lettuce|spinach|broccoli|cabbage|corn|pea|bean|mushroom/.test(
+        name
+      )
+    ) {
+      return "vegetables";
+    }
+
+    // Meat category
+    if (
+      name.includes("meat") ||
+      /chicken|beef|pork|turkey|ham|bacon|sausage|ground|steak|mince|lamb|veal/.test(
+        name
+      )
+    ) {
+      return "meat";
+    }
+
+    // Seafood category
+    if (
+      name.includes("fish") ||
+      name.includes("seafood") ||
+      /shrimp|salmon|tuna|crab|lobster|oyster|clam|mussel|prawn|cod|tilapia/.test(
+        name
+      )
+    ) {
+      return "seafood";
+    }
+
+    // Dairy category
+    if (
+      name.includes("dairy") ||
+      /milk|cheese|yogurt|butter|cream|halloumi|cheddar|mozzarella|parmesan|feta/.test(
+        name
+      )
+    ) {
+      return "dairy";
+    }
+
+    // Grains category
+    if (
+      name.includes("grain") ||
+      /rice|pasta|flour|bread|cereal|oat|wheat|barley|quinoa|noodle|pizza|bun/.test(
+        name
+      )
+    ) {
+      return "grains";
+    }
+
+    // Condiments category
+    if (
+      name.includes("condiment") ||
+      /oil|vinegar|sauce|ketchup|mustard|mayo|mayonnaise|dressing|bbq|honey|syrup/.test(
+        name
+      )
+    ) {
+      return "condiments";
+    }
+
+    // Spices category
+    if (
+      name.includes("spice") ||
+      name.includes("herb") ||
+      /salt|pepper|oregano|basil|thyme|cinnamon|cumin|paprika|powder|seasoning|garlic powder|chili/.test(
+        name
+      )
+    ) {
+      return "spices";
+    }
+
+    // Fall back to 'other' for anything that doesn't match
+    return "other";
+  };
+
   // Add a new function to generate a shopping list from the meal plan
-  const generateShoppingList = () => {
+  const generateShoppingList = async () => {
     if (mealPlan.length === 0) {
       Alert.alert(
         "Empty Meal Plan",
@@ -993,65 +1097,214 @@ export default function MealPlanScreen() {
       return;
     }
 
-    // Get all recipes in the meal plan
-    const mealRecipes = mealPlan
-      .map((meal) => {
-        return suggestedRecipes.find((recipe) => recipe.id === meal.recipeId);
-      })
-      .filter(Boolean);
+    // Show loading indicator
+    setIsGeneratingOptimizedPlan(true);
 
-    // Collect all ingredients from these recipes
-    const allIngredients: RecipeIngredient[] = [];
-    let totalIngredientsCount = 0;
+    try {
+      // Get all recipes in the meal plan
+      const mealRecipeIds = mealPlan.map((meal) => meal.recipeId);
 
-    mealRecipes.forEach((recipe) => {
-      if (
-        recipe?.extendedIngredients &&
-        recipe.extendedIngredients.length > 0
-      ) {
-        // Get pantry items to filter out ingredients we already have
-        const pantryItems = usePantryStore.getState().items;
-        const pantryItemNames = new Set(
-          pantryItems.map((item) => item.name.toLowerCase())
+      // Count how many times each recipe appears in the meal plan
+      const recipeOccurrences: Record<string, number> = {};
+      mealRecipeIds.forEach((id) => {
+        recipeOccurrences[id] = (recipeOccurrences[id] || 0) + 1;
+      });
+
+      // Get unique recipe IDs
+      const uniqueRecipeIds = [...new Set(mealRecipeIds)];
+
+      console.log(
+        `Processing ${uniqueRecipeIds.length} unique recipes for shopping list with repetitions`
+      );
+
+      // Log recipe occurrences for debugging
+      Object.entries(recipeOccurrences).forEach(([id, count]) => {
+        const recipe = suggestedRecipes.find((r) => r.id === id);
+        console.log(
+          `Recipe "${
+            recipe?.title || id
+          }" appears ${count} times in the meal plan`
+        );
+      });
+
+      // Get pantry items
+      const pantryItems = usePantryStore.getState().items;
+      console.log(
+        `Found ${pantryItems.length} pantry items to subtract from shopping list`
+      );
+
+      // Find recipes in suggested recipes
+      const recipesToProcess = uniqueRecipeIds
+        .map((id) => suggestedRecipes.find((recipe) => recipe.id === id))
+        .filter(Boolean);
+
+      // Enhance recipes with OpenAI to get proper ingredient quantities and units
+      const enhancedRecipes = await Promise.all(
+        recipesToProcess.map(async (recipe) => {
+          console.log(
+            `Enhancing recipe: ${
+              recipe?.title || (recipe as any)?.strMeal || recipe?.id
+            }`
+          );
+          return enhanceRecipeIngredients(recipe as any);
+        })
+      );
+
+      console.log(`Enhanced ${enhancedRecipes.length} recipes with OpenAI`);
+
+      // Collect all ingredients from these recipes, accounting for repetitions
+      const ingredientsByName: Record<
+        string,
+        {
+          name: string;
+          amount: number;
+          unit: string;
+          category: FoodCategory;
+          recipes: string[];
+        }
+      > = {};
+
+      enhancedRecipes.forEach((recipe) => {
+        if (
+          !recipe?.extendedIngredients ||
+          recipe.extendedIngredients.length === 0
+        ) {
+          console.log(
+            `No ingredients found for recipe: ${recipe?.title || recipe?.id}`
+          );
+          return;
+        }
+
+        const recipeTitle = recipe.title || recipe.strMeal || "Unknown Recipe";
+        const repetitionCount = recipeOccurrences[recipe.id] || 1;
+
+        console.log(
+          `Recipe "${recipeTitle}" has ${recipe.extendedIngredients.length} ingredients and appears ${repetitionCount} times`
         );
 
-        // Filter out ingredients already in pantry
-        const neededIngredients = recipe.extendedIngredients.filter((ing) => {
-          const name = (ing.name || ing.originalName || "").toLowerCase();
-          return (
-            !pantryItemNames.has(name) &&
-            !pantryItems.some((item) => name.includes(item.name.toLowerCase()))
-          );
+        // Process each ingredient, multiplying by the number of repetitions
+        recipe.extendedIngredients.forEach((ingredient) => {
+          if (!ingredient.name) return;
+
+          const name = ingredient.name.toLowerCase();
+          const amount = Number(ingredient.amount || 1) * repetitionCount;
+          const unit = ingredient.unit || "item";
+
+          // Categorize the ingredient based on its name
+          const category = categorizeIngredient(ingredient.name);
+
+          // If this ingredient already exists with the same unit, add to it
+          const key = `${name}|${unit}`;
+          if (ingredientsByName[key]) {
+            ingredientsByName[key].amount += amount;
+            if (!ingredientsByName[key].recipes.includes(recipeTitle)) {
+              ingredientsByName[key].recipes.push(recipeTitle);
+            }
+          } else {
+            ingredientsByName[key] = {
+              name: ingredient.name,
+              amount,
+              unit,
+              category,
+              recipes: [recipeTitle],
+            };
+          }
+        });
+      });
+
+      // Convert to array and subtract pantry items
+      let shoppingList = Object.values(ingredientsByName);
+
+      console.log(
+        `Created ${shoppingList.length} total ingredients before pantry subtraction`
+      );
+
+      // Subtract pantry items from shopping list
+      const finalShoppingList = shoppingList.map((item) => {
+        // Find matching pantry items (case insensitive)
+        const matchingPantryItems = pantryItems.filter(
+          (pantryItem) =>
+            pantryItem.name.toLowerCase().includes(item.name.toLowerCase()) ||
+            item.name.toLowerCase().includes(pantryItem.name.toLowerCase())
+        );
+
+        // If we have matching pantry items with the same unit, subtract
+        let remainingAmount = item.amount;
+
+        matchingPantryItems.forEach((pantryItem) => {
+          if (pantryItem.unit.toLowerCase() === item.unit.toLowerCase()) {
+            console.log(
+              `Subtracting ${pantryItem.quantity} ${pantryItem.unit} of ${pantryItem.name} from shopping list`
+            );
+            remainingAmount = Math.max(
+              0,
+              remainingAmount - pantryItem.quantity
+            );
+          }
         });
 
-        allIngredients.push(...neededIngredients);
-        totalIngredientsCount += neededIngredients.length;
-      }
-    });
+        // If we have enough in pantry, mark as fulfilled
+        return {
+          ...item,
+          amount: remainingAmount,
+          fulfilled: remainingAmount <= 0,
+        };
+      });
 
-    if (allIngredients.length === 0) {
-      Alert.alert(
-        "No Ingredients Needed",
-        "You already have all the ingredients for your meal plan in your pantry!"
+      // Filter out items we already have enough of in the pantry
+      const itemsToShop = finalShoppingList.filter(
+        (item) => !item.fulfilled && item.amount > 0
       );
-      return;
+
+      console.log(
+        `Final shopping list has ${itemsToShop.length} items after pantry subtraction`
+      );
+
+      // Convert to RecipeIngredient format for the shopping list store
+      const ingredientsToAdd = itemsToShop.map((item) => ({
+        id: generateId(),
+        name: item.name,
+        amount: item.amount,
+        unit: item.unit,
+        category: item.category,
+        recipeName: item.recipes.join(", "),
+      }));
+
+      if (ingredientsToAdd.length === 0) {
+        Alert.alert(
+          "Nothing to Buy",
+          "All the ingredients for your meal plan are already in your pantry!"
+        );
+        setIsGeneratingOptimizedPlan(false);
+        return;
+      }
+
+      // Add ingredients to shopping list
+      addRecipeIngredients(ingredientsToAdd);
+
+      // Show success message with navigation options
+      Alert.alert(
+        "Shopping List Generated",
+        `Added ${ingredientsToAdd.length} ingredient${
+          ingredientsToAdd.length !== 1 ? "s" : ""
+        } to your shopping list.`,
+        [
+          {
+            text: "View Shopping List",
+            onPress: () => router.push("/(tabs)/shopping-list"),
+          },
+          { text: "Continue", style: "cancel" },
+        ]
+      );
+    } catch (error) {
+      console.error("Error generating shopping list:", error);
+      Alert.alert(
+        "Error",
+        "There was a problem generating your shopping list. Please try again."
+      );
+    } finally {
+      setIsGeneratingOptimizedPlan(false);
     }
-
-    // Add ingredients to shopping list
-    addRecipeIngredients(allIngredients);
-
-    // Show success message
-    Alert.alert(
-      "Shopping List Generated",
-      `Added ${totalIngredientsCount} ingredients to your shopping list.`,
-      [
-        {
-          text: "View Shopping List",
-          onPress: () => router.push("/shopping-list"),
-        },
-        { text: "Continue", style: "cancel" },
-      ]
-    );
   };
 
   return (
@@ -1168,6 +1421,91 @@ export default function MealPlanScreen() {
                     <ShoppingCart size={16} color="#FFFFFF" />
                     <Text style={styles.optimizeButtonText}>
                       Generate Shopping List from Meal Plan
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.optimizeButton,
+                      { marginTop: 8, backgroundColor: Colors.danger },
+                    ]}
+                    onPress={() => {
+                      // Debug button to inspect a recipe
+                      if (mealPlan.length > 0 && suggestedRecipes.length > 0) {
+                        const firstMealId = mealPlan[0].recipeId;
+                        const recipe = suggestedRecipes.find(
+                          (r) => r.id === firstMealId
+                        );
+
+                        if (recipe) {
+                          console.log(
+                            "DEBUG - Recipe structure:",
+                            JSON.stringify(recipe)
+                          );
+                          console.log("Recipe keys:", Object.keys(recipe));
+                          console.log(
+                            "Has strIngredient1:",
+                            !!(recipe as any).strIngredient1
+                          );
+                          console.log(
+                            "Has extendedIngredients:",
+                            !!recipe.extendedIngredients
+                          );
+
+                          if (recipe.extendedIngredients) {
+                            console.log(
+                              "extendedIngredients count:",
+                              recipe.extendedIngredients.length
+                            );
+                          }
+
+                          // Create manual fallback ingredients for testing
+                          const testIngredients = [
+                            {
+                              id: "test-1",
+                              name: "Chicken",
+                              amount: 500,
+                              unit: "g",
+                            },
+                            {
+                              id: "test-2",
+                              name: "Rice",
+                              amount: 2,
+                              unit: "cups",
+                            },
+                            {
+                              id: "test-3",
+                              name: "Onion",
+                              amount: 1,
+                              unit: "medium",
+                            },
+                          ];
+
+                          // Add these test ingredients to shopping list
+                          addRecipeIngredients(testIngredients);
+
+                          Alert.alert(
+                            "Debug Info",
+                            `Added 3 test ingredients to your shopping list for debugging. Check console for more details.`,
+                            [
+                              {
+                                text: "View Shopping List",
+                                onPress: () =>
+                                  router.push("/(tabs)/shopping-list"),
+                              },
+                              { text: "OK", style: "cancel" },
+                            ]
+                          );
+                        } else {
+                          Alert.alert("Debug", "No recipe found");
+                        }
+                      } else {
+                        Alert.alert("Debug", "No meals in plan");
+                      }
+                    }}
+                  >
+                    <Text style={styles.optimizeButtonText}>
+                      Debug: Add Test Ingredients
                     </Text>
                   </TouchableOpacity>
                 </>

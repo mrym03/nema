@@ -60,8 +60,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setLoading(true);
     try {
       const { session } = await signInUser(email, password);
-      setSession(session);
-      setUser(session?.user ?? null);
+      setSession(session as Session);
+      setUser((session?.user as User) ?? null);
 
       // Reset onboarding status so user will be prompted for preferences again
       try {
@@ -91,8 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setLoading(true);
     try {
       const { session } = await signUpUser(email, password);
-      setSession(session);
-      setUser(session?.user ?? null);
+      setSession(session as Session);
+      setUser((session?.user as User) ?? null);
     } catch (error) {
       console.error("Error signing up:", error);
       throw error;
