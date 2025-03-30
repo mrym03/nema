@@ -5,6 +5,57 @@ import { mockRecipes } from "@/mocks/recipes";
 const THEMEALDB_API_KEY = "1"; // Using the test API key "1" for development
 const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
 
+// Retry configuration
+const MAX_RETRIES = 4; // Increase max retries
+const RETRY_DELAY = 2000; // Increase delay to 2 seconds
+const INCREASING_DELAY = true; // Use increasing delays between retries
+
+// Helper function to delay execution
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to make API calls with retries
+async function fetchWithRetry(url: string, retries = MAX_RETRIES, attempt = 1): Promise<any> {
+  try {
+    // Add a small random delay before each request to avoid simultaneous hits
+    const initialDelay = Math.random() * 500;
+    await wait(initialDelay);
+    
+    const response = await fetch(url);
+    
+    // Handle rate limit
+    if (response.status === 429) {
+      if (retries > 0) {
+        // Calculate delay - use increasing delays if enabled
+        const currentDelay = INCREASING_DELAY ? RETRY_DELAY * attempt : RETRY_DELAY;
+        
+        console.log(`Rate limited (429), retrying in ${currentDelay}ms... (${retries} retries left)`);
+        await wait(currentDelay);
+        return fetchWithRetry(url, retries - 1, attempt + 1);
+      } else {
+        console.log('Maximum retries reached for rate limit, using fallback data');
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+    }
+    
+    // Handle other errors
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    if (retries > 0 && error.message !== 'Rate limit exceeded. Please try again later.') {
+      // Calculate delay with increasing backoff
+      const currentDelay = INCREASING_DELAY ? RETRY_DELAY * attempt : RETRY_DELAY;
+      
+      console.log(`API request failed, retrying in ${currentDelay}ms... (${retries} retries left)`);
+      await wait(currentDelay);
+      return fetchWithRetry(url, retries - 1, attempt + 1);
+    }
+    throw error;
+  }
+}
+
 /**
  * Simplifies ingredient names to work better with TheMealDB search
  */
@@ -131,16 +182,7 @@ export const fetchRecipesByIngredients = async (
         try {
           console.log(`Searching for recipes with cuisine: ${cuisine}`);
           const url = `${THEMEALDB_BASE_URL}/filter.php?a=${cuisine}`;
-          const response = await fetch(url);
-
-          if (!response.ok) {
-            console.warn(
-              `API error for cuisine ${cuisine}: ${response.status}`
-            );
-            continue;
-          }
-
-          const searchResults = await response.json();
+          const searchResults = await fetchWithRetry(url);
 
           if (!searchResults.meals) {
             console.log(`No meals found for cuisine: ${cuisine}`);
@@ -214,11 +256,7 @@ export const fetchRecipesByIngredients = async (
       try {
         console.log(`Searching for recipes in category: ${category}`);
         const url = `${THEMEALDB_BASE_URL}/filter.php?c=${category}`;
-        const response = await fetch(url);
-
-        if (!response.ok) continue;
-
-        const searchResults = await response.json();
+        const searchResults = await fetchWithRetry(url);
 
         if (!searchResults.meals) continue;
 
@@ -252,13 +290,12 @@ export const fetchRecipesByIngredients = async (
           );
 
           const url = `${THEMEALDB_BASE_URL}/filter.php?i=${simplifiedIngredient}`;
-          const response = await fetch(url);
+          const searchResults = await fetchWithRetry(url);
 
-          if (!response.ok) continue;
-
-          const searchResults = await response.json();
-
-          if (!searchResults.meals) continue;
+          if (!searchResults.meals) {
+            console.log(`No meals found for ingredient: ${simplifiedIngredient}`);
+            continue;
+          }
 
           console.log(
             `Found ${searchResults.meals.length} recipes for ${simplifiedIngredient}`
@@ -436,57 +473,73 @@ export const fetchRecipesByIngredients = async (
   }
 };
 
-/**
- * Gets detailed information for a specific recipe
- */
+// Add a cache for recipe details
+const recipeDetailsCache: Record<string, any> = {};
+
+// Update the getRecipeDetails function to use cache
 export const getRecipeDetails = async (recipeId: string): Promise<any> => {
   try {
+    // Check cache first
+    if (recipeDetailsCache[recipeId]) {
+      console.log(`Using cached details for recipe ${recipeId}`);
+      return recipeDetailsCache[recipeId];
+    }
+    
+    console.log(`Fetching details for recipe ${recipeId}`);
+    
+    // Use retry mechanism
     const url = `${THEMEALDB_BASE_URL}/lookup.php?i=${recipeId}`;
-    const response = await fetch(url);
+    const data = await fetchWithRetry(url);
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+    if (!data.meals || data.meals.length === 0) {
+      throw new Error(`Recipe with ID ${recipeId} not found`);
     }
 
-    const data = await response.json();
+    const mealDetail = data.meals[0];
 
-    if (!data.meals || !data.meals[0]) {
-      throw new Error("Recipe not found");
-    }
-
-    const mealDetails = data.meals[0];
-
-    // Extract ingredients and measurements
+    // Parse ingredients and measurements from TheMealDB format
     const ingredients = [];
     for (let i = 1; i <= 20; i++) {
-      const ingredient = mealDetails[`strIngredient${i}`];
-      const measure = mealDetails[`strMeasure${i}`];
+      const ingredient = mealDetail[`strIngredient${i}`];
+      const measure = mealDetail[`strMeasure${i}`];
 
       if (ingredient && ingredient.trim()) {
         ingredients.push({
-          id: i.toString(),
-          name: ingredient,
-          amount: measure || "",
-          unit: "",
-          original: `${measure || ""} ${ingredient}`.trim(),
+          name: ingredient.trim(),
+          amount: measure ? measure.trim() : "",
+          original: `${measure ? measure.trim() : ""} ${ingredient.trim()}`,
         });
       }
     }
 
-    return {
-      id: mealDetails.idMeal.toString(),
-      title: mealDetails.strMeal,
-      imageUrl: mealDetails.strMealThumb,
-      readyInMinutes: 30, // Not provided by TheMealDB
-      servings: 4, // Not provided by TheMealDB
-      sourceUrl: mealDetails.strSource || mealDetails.strYoutube || "",
-      summary: mealDetails.strInstructions || "",
-      instructions: mealDetails.strInstructions || "",
+    // Create a recipe object with the data structure we need
+    const recipe: Recipe = {
+      id: mealDetail.idMeal,
+      title: mealDetail.strMeal,
+      imageUrl: mealDetail.strMealThumb,
+      readyInMinutes: 30, // TheMealDB doesn't provide this, so we set a default
+      servings: parseInt(mealDetail.strYield) || 4, // Use yield if available or default to 4
+      sourceUrl: mealDetail.strSource || "",
+      summary: mealDetail.strInstructions
+        ? mealDetail.strInstructions.split(".").slice(0, 2).join(".") + "."
+        : "",
+      instructions: mealDetail.strInstructions || "",
       extendedIngredients: ingredients,
-      usedIngredientCount: 0, // These will be filled in by the calling code
-      missedIngredientCount: 0,
-      likes: 0, // Not provided by TheMealDB
+      usedIngredientCount: 0, // Set later when filtering
+      missedIngredientCount: 0, // Set later when filtering
+      likes: 0, // TheMealDB doesn't have this concept
+      // Add dietary flags based on category and tags
+      vegetarian: mealDetail.strCategory === "Vegetarian",
+      vegan: mealDetail.strTags?.toLowerCase().includes("vegan") || false,
+      glutenFree: mealDetail.strTags?.toLowerCase().includes("gluten free") || false,
+      dairyFree: mealDetail.strTags?.toLowerCase().includes("dairy free") || false,
+      diets: mealDetail.strTags ? mealDetail.strTags.split(",").map((tag: string) => tag.trim()) : [],
     };
+    
+    // Cache the result
+    recipeDetailsCache[recipeId] = recipe;
+
+    return recipe;
   } catch (error) {
     console.error(`Error fetching details for recipe ${recipeId}:`, error);
     throw error;
