@@ -54,13 +54,11 @@ export default function AuthScreen() {
       >
         <View style={styles.logoContainer}>
           <Image
-            source={{
-              uri: "https://images.unsplash.com/photo-1517260739337-6799d239ce83?q=80&w=300",
-            }}
+            source={require('@/assets/images/nemalogo.png')}
             style={styles.logo}
+            resizeMode="contain"
           />
-          <Text style={styles.title}>Zero Waste Pantry</Text>
-          <Text style={styles.subtitle}>Reduce food waste, save money</Text>
+          <Text style={styles.subtitle}>Every meal is a gift.</Text>
         </View>
 
         <Text style={styles.authTitle}>
@@ -128,16 +126,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 150,
+    height: 150,
     marginBottom: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: Colors.primary,
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
