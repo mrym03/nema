@@ -658,14 +658,7 @@ export default function MealPlanScreen() {
       // Get the explanation from the store if available
       const planExplanation = useMealPlannerStore.getState().error;
 
-      // Show standard success message without special notification
-      Alert.alert(
-        "Meal Plan Created",
-        "Your meal plan has been optimized with AI to minimize food waste and use expiring items first. Similar recipes have been suggested to enhance variety.",
-        [{ text: "Great!" }]
-      );
-
-      // Clear the explanation from the store
+      // Just clear the explanation from the store without showing a popup
       useMealPlannerStore.getState().error = null;
     } catch (error) {
       console.error("Error generating smart meal plan:", error);
@@ -1114,13 +1107,6 @@ Focus on creating the MINIMUM possible number of shopping items a home cook woul
             };
           });
 
-        // Show the user a message about the optimization
-        Alert.alert(
-          "Shopping List Optimized",
-          `Your shopping list has been optimized from ${shoppingItems.length} to ${optimizedItems.length} items.\n\nThe list has been optimized to minimize the number of items by:\n• Removing common spices and pantry staples\n• Consolidating similar ingredients\n• Replacing multiple similar items with versatile alternatives\n• Removing items like broth that can be made from other ingredients`,
-          [{ text: "OK" }]
-        );
-
         return optimizedItems;
       } catch (e) {
         console.error("Failed to parse OpenAI optimization response:", e);
@@ -1394,20 +1380,22 @@ Focus on creating the MINIMUM possible number of shopping items a home cook woul
       // Stop loading indicator
       setIsGeneratingOptimizedPlan(false);
 
-      // Notification of success
+      // Show a single improved notification with better UI styling
       Alert.alert(
-        "Shopping List Generated",
-        `Your shopping list has been optimized from ${initialShoppingItems.length} to ${optimizedShoppingItems.length} items.\n\nThe list has been optimized to minimize the number of items by:\n• Removing common spices and pantry staples\n• Consolidating similar ingredients\n• Replacing multiple similar items with versatile alternatives\n• Removing items like broth that can be made from other ingredients`,
+        "Smart Shopping List Generated",
+        `Your shopping list has been optimized from ${initialShoppingItems.length} to ${optimizedShoppingItems.length} items.\n\nOptimizations applied:\n• Removed common pantry staples\n• Consolidated similar ingredients\n• Used versatile alternatives\n• Excluded items easily made at home`,
         [
           {
             text: "View List",
             onPress: () => router.push("/(tabs)/shopping-list"),
+            style: "default",
           },
           {
-            text: "OK",
+            text: "Close",
             style: "cancel",
           },
-        ]
+        ],
+        { cancelable: true }
       );
     } catch (error) {
       console.error("Error generating shopping list:", error);
