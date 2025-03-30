@@ -271,21 +271,35 @@ export default function RecipesScreen() {
         ) : recipes.length === 0 ? (
           renderEmptyState()
         ) : (
-          <FlatList
-            data={recipes}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={styles.list}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[Colors.primary]}
-                tintColor={Colors.primary}
-              />
-            }
-          />
+          <>
+            {selectedRecipes.length > 0 && (
+              <TouchableOpacity
+                style={styles.mealPlanButton}
+                onPress={handleViewMealPlanner}
+              >
+                <Calendar size={18} color="#FFFFFF" />
+                <Text style={styles.mealPlanButtonText}>
+                  Create Meal Plan ({selectedRecipes.length})
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <FlatList
+              data={recipes}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              contentContainerStyle={styles.list}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={[Colors.primary]}
+                  tintColor={Colors.primary}
+                />
+              }
+            />
+          </>
         )}
       </View>
     </View>
@@ -376,5 +390,28 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
     textAlign: 'center',
     marginTop: 4,
+  },
+  mealPlanButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    shadowColor: Colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  mealPlanButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 10,
   },
 });
