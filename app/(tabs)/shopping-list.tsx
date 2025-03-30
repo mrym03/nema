@@ -22,9 +22,9 @@ import ShoppingListItem from "@/components/ShoppingListItem";
 import EmptyState from "@/components/EmptyState";
 import { Plus, Trash2, ShoppingCart } from "lucide-react-native";
 import { CATEGORIES } from "@/constants/categories";
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import HeaderBar from '@/components/HeaderBar';
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
+import HeaderBar from "@/components/HeaderBar";
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -228,23 +228,21 @@ export default function ShoppingListScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
-      <HeaderBar 
+
+      <HeaderBar
         title="Shopping List"
         subtitle={`${items.length} items`}
         rightButtons={
           <>
-            <Pressable
-              style={styles.iconButton}
-              onPress={handleAddItem}
-            >
+            <Pressable style={styles.iconButton} onPress={handleAddItem}>
               <Ionicons name="add" size={24} color={Colors.textDark} />
             </Pressable>
-            <Pressable
-              style={styles.iconButton}
-              onPress={handleClearCompleted}
-            >
-              <Ionicons name="trash-outline" size={22} color={Colors.textDark} />
+            <Pressable style={styles.iconButton} onPress={handleClearCompleted}>
+              <Ionicons
+                name="trash-outline"
+                size={22}
+                color={Colors.textDark}
+              />
             </Pressable>
           </>
         }
