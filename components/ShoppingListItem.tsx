@@ -1,20 +1,28 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
 import { ShoppingListItem as ShoppingListItemType } from "@/types";
 import { CATEGORIES } from "@/constants/categories";
 import Colors from "@/constants/colors";
-import { Check, Trash2, BookOpen } from "lucide-react-native";
+import {
+  Check,
+  Trash2,
+  BookOpen,
+  MoveRight,
+  ShoppingBag,
+} from "lucide-react-native";
 
 interface ShoppingListItemProps {
   item: ShoppingListItemType;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  onMoveToPantry?: (id: string) => void;
 }
 
 const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
   item,
   onToggle,
   onRemove,
+  onMoveToPantry,
 }) => {
   const category = CATEGORIES[item.category];
 
@@ -23,6 +31,24 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
     return Number.isInteger(quantity)
       ? quantity.toString()
       : quantity.toFixed(1);
+  };
+
+  const handleMoveToPantry = () => {
+    Alert.alert(
+      "Move to Pantry",
+      "This will remove the item from your shopping list and add it to your pantry. Continue?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Move",
+          onPress: () => {
+            if (onMoveToPantry) {
+              onMoveToPantry(item.id);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -71,15 +97,30 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
         )}
       </View>
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.deleteButton,
-          pressed && styles.pressed,
-        ]}
-        onPress={() => onRemove(item.id)}
-      >
-        <Trash2 size={20} color={Colors.danger} />
-      </Pressable>
+      <View style={styles.actionsContainer}>
+        {item.completed && onMoveToPantry && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              styles.moveButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={handleMoveToPantry}
+          >
+            <ShoppingBag size={16} color="#fff" />
+          </Pressable>
+        )}
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.deleteButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onRemove(item.id)}
+        >
+          <Trash2 size={20} color={Colors.danger} />
+        </Pressable>
+      </View>
     </View>
   );
 };
@@ -158,6 +199,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.textLight,
     flex: 1,
+  },
+  actionsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  actionButton: {
+    padding: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  moveButton: {
+    backgroundColor: Colors.success,
   },
   deleteButton: {
     padding: 8,

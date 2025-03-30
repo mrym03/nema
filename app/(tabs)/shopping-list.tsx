@@ -8,9 +8,11 @@ import {
   Alert,
   Platform,
   SectionList,
+  ToastAndroid,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useShoppingListStore } from "@/store/shoppingListStore";
+import { usePantryStore } from "@/store/pantryStore";
 import {
   ShoppingListItem as ShoppingListItemType,
   FoodCategory,
@@ -46,8 +48,14 @@ try {
 
 export default function ShoppingListScreen() {
   const insets = useSafeAreaInsets();
-  const { items, addItem, updateItem, removeItem, clearCompletedItems } =
-    useShoppingListStore();
+  const {
+    items,
+    addItem,
+    updateItem,
+    removeItem,
+    clearCompletedItems,
+    moveItemToPantry,
+  } = useShoppingListStore();
 
   // Group items by category for section list
   const groupedItems = useMemo(() => {
@@ -123,15 +131,28 @@ export default function ShoppingListScreen() {
     }
   };
 
+  const handleMoveToPantry = (id: string) => {
+    moveItemToPantry(id);
+
+    // Show feedback to the user
+    if (Platform.OS === "android") {
+      ToastAndroid.show("Item moved to pantry", ToastAndroid.SHORT);
+    } else {
+      // For iOS, we've already shown an alert in the ShoppingListItem component
+      // So no need for additional feedback here
+    }
+  };
+
   const renderItem = useCallback(
     ({ item }: { item: ShoppingListItemType }) => (
       <ShoppingListItem
         item={item}
         onToggle={() => updateItem(item.id, { completed: !item.completed })}
         onRemove={() => removeItem(item.id)}
+        onMoveToPantry={handleMoveToPantry}
       />
     ),
-    [updateItem, removeItem]
+    [updateItem, removeItem, moveItemToPantry]
   );
 
   const renderSectionHeader = useCallback(
