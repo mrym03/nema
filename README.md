@@ -11,6 +11,44 @@ A mobile application to help reduce food waste by tracking expiration dates of p
 - Identify foods with AI image recognition
 - View items by categories and expiration status
 
+## NEW: AI-Powered Smart Meal Planning
+
+We've added a new AI-powered meal planning feature that optimizes your weekly meals to minimize food waste. This feature:
+
+- Uses expiration dates to prioritize ingredients that will spoil soon
+- Ensures recipe variety throughout the week
+- Prevents recipe repetition within the same day
+- Preserves your existing meal selections when re-optimizing
+- Intelligently combines ingredients to minimize shopping needs
+
+### Setting Up OpenAI API Key
+
+To use the AI-powered meal planning feature, you'll need an OpenAI API key with access to the GPT-4o-mini model:
+
+1. Sign up for an OpenAI API key at [https://openai.com/api/](https://openai.com/api/)
+2. Create a `.env` file in the project root with the following content:
+   ```
+   EXPO_PUBLIC_OPENAI_API_KEY=your-api-key-here
+   ```
+3. Restart the development server
+
+If no API key is provided, the app will fall back to the rule-based optimization algorithm.
+
+### How AI Meal Planning Works
+
+The AI meal planning feature combines our rule-based optimization algorithm with OpenAI's GPT-4o-mini model to create an advanced meal planning system that:
+
+1. Analyzes your pantry items and their expiration dates
+2. Calculates an initial score for each recipe based on:
+   - How many pantry ingredients it uses
+   - How soon those ingredients will expire
+   - How many new ingredients you'd need to buy
+3. Sends this data to the GPT-4o-mini API to enhance the planning with:
+   - More sophisticated variety considerations
+   - Better recipe combinations that minimize waste
+   - Explanations for why each recipe was selected
+4. Creates a complete meal plan customized to your preferences
+
 ## Getting Started
 
 ### Prerequisites
@@ -22,17 +60,20 @@ A mobile application to help reduce food waste by tracking expiration dates of p
 ### Installation
 
 1. Clone the repository
+
    ```
    git clone https://github.com/yourusername/zero-waste-pantry.git
    cd zero-waste-pantry
    ```
 
 2. Install dependencies
+
    ```
    npm install
    ```
 
 3. Start the development server
+
    ```
    npm start
    ```
@@ -93,6 +134,7 @@ zero-waste-pantry/
 The app uses Supabase for data storage with the following tables:
 
 ### Pantry Items Table
+
 - `id`: UUID (primary key)
 - `user_id`: UUID (foreign key to users table)
 - `name`: String (product name)
@@ -103,6 +145,7 @@ The app uses Supabase for data storage with the following tables:
 - `image_url`: String (optional)
 
 ### Users Table
+
 - `id`: UUID (primary key)
 - `email`: String
 - `created_at`: Timestamp
@@ -150,4 +193,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Expo](https://expo.dev/) for the development framework
 - [Supabase](https://supabase.com/) for database and authentication
 - [Open Food Facts](https://world.openfoodfacts.org/) for product database API
-- [OpenAI](https://openai.com/) for AI-powered food identification 
+- [OpenAI](https://openai.com/) for AI-powered food identification

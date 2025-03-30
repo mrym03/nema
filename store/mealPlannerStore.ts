@@ -4,6 +4,9 @@ import { useRecipeStore } from "./recipeStore";
 import { usePantryStore } from "./pantryStore";
 import { fetchRecipesByIngredients } from "@/utils/mealDbApi";
 
+// Import OpenAI functionality - we'll use this for enhanced recipe recommendations
+const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || "";
+
 // Define the structure of a meal in the meal plan
 export interface MealPlanItem {
   id: string;
@@ -33,6 +36,16 @@ interface MealPlanState {
     dietaryPreferences: string[],
     cuisinePreferences: string[]
   ) => Promise<void>;
+  generateSmartMealPlan: (
+    dietaryPreferences: string[],
+    cuisinePreferences: string[],
+    mealsPerDay: number,
+    existingSelections: {
+      recipeId: string;
+      dayIndex: number;
+      mealType: string;
+    }[]
+  ) => Promise<void>;
   addToMealPlan: (
     recipe: Recipe,
     dayIndex: number,
@@ -61,6 +74,55 @@ const getDaysUntilExpiry = (expiryDate: string): number => {
 const generateId = (): string => {
   return Date.now().toString(36) + Math.random().toString(36).substring(2);
 };
+
+// Helper function to call OpenAI GPT API
+async function callGptApi(prompt: string): Promise<any> {
+  try {
+    if (!OPENAI_API_KEY) {
+      console.warn("No OpenAI API key found");
+      return null;
+    }
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful meal planning assistant that optimizes recipe choices based on pantry ingredients, expiration dates, and user preferences.",
+          },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 1500,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API Error:", errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    try {
+      return JSON.parse(data.choices[0].message.content);
+    } catch (e) {
+      console.error("Error parsing JSON response:", e);
+      return null;
+    }
+  } catch (error) {
+    console.error("Error calling OpenAI API:", error);
+    return null;
+  }
+}
 
 export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
   mealPlan: [],
@@ -142,6 +204,311 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
       });
     } catch (error) {
       console.error("Error generating meal plan:", error);
+      set({
+        error: "Failed to generate meal plan. Please try again.",
+        isLoading: false,
+      });
+    }
+  },
+
+  generateSmartMealPlan: async (
+    dietaryPreferences,
+    cuisinePreferences,
+    mealsPerDay,
+    existingSelections
+  ) => {
+    set({ isLoading: true, error: null });
+
+    try {
+      // Get selected recipes from recipe store
+      const selectedRecipes = useRecipeStore.getState().selectedRecipes;
+
+      if (selectedRecipes.length === 0) {
+        set({
+          error: "No recipes selected. Please select recipes first.",
+          isLoading: false,
+          suggestedRecipes: [],
+        });
+        return;
+      }
+
+      // Get pantry items with expiration dates
+      const pantryItems = usePantryStore.getState().items;
+
+      // Process pantry items to focus on expiry dates
+      const pantryWithExpiry = pantryItems.map((item) => ({
+        name: item.name,
+        expiryDate: item.expiryDate || null,
+        daysUntilExpiry: item.expiryDate
+          ? getDaysUntilExpiry(item.expiryDate)
+          : null,
+        category: item.category,
+      }));
+
+      // Sort pantry items by expiry date (soon to expire first)
+      const soonToExpireItems = pantryWithExpiry
+        .filter((item) => item.expiryDate)
+        .sort(
+          (a, b) => (a.daysUntilExpiry || 100) - (b.daysUntilExpiry || 100)
+        );
+
+      // Extract key ingredients from selected recipes and soon-to-expire pantry items
+      const selectedIngredients = new Set<string>();
+      const uniqueExpiringIngredients = new Set<string>();
+
+      // Add soon-to-expire ingredients to a set (prioritize these)
+      soonToExpireItems.forEach((item) => {
+        uniqueExpiringIngredients.add(item.name.toLowerCase());
+      });
+
+      // Extract ingredients from selected recipes
+      selectedRecipes.forEach((recipe) => {
+        if (
+          recipe.extendedIngredients &&
+          Array.isArray(recipe.extendedIngredients)
+        ) {
+          recipe.extendedIngredients.forEach((ingredient) => {
+            if (ingredient.name) {
+              selectedIngredients.add(ingredient.name.toLowerCase());
+            }
+          });
+        }
+      });
+
+      // Fetch additional similar recipes to expand options
+      console.log(
+        "Fetching additional recipes similar to selected ones and using soon-to-expire ingredients"
+      );
+
+      const allIngredients = [
+        ...Array.from(uniqueExpiringIngredients),
+        ...Array.from(selectedIngredients),
+      ];
+
+      // Use the first 5 ingredients to avoid overloading the API
+      const ingredientsToSearch = allIngredients.slice(0, 5);
+
+      const additionalRecipes = await fetchRecipesByIngredients(
+        ingredientsToSearch,
+        dietaryPreferences,
+        cuisinePreferences
+      );
+
+      console.log(
+        `Found ${additionalRecipes.length} additional similar recipes`
+      );
+
+      // Combine selected recipes with additional recipes, ensuring no duplicates
+      const existingIds = new Set(selectedRecipes.map((r) => r.id));
+      const allRecipes = [
+        ...selectedRecipes,
+        ...additionalRecipes.filter((r) => !existingIds.has(r.id)),
+      ];
+
+      console.log(
+        `Total recipe pool: ${allRecipes.length} recipes (${
+          selectedRecipes.length
+        } selected by user, ${
+          allRecipes.length - selectedRecipes.length
+        } suggested)`
+      );
+
+      // Create simplified recipe data for the AI
+      const simplifiedRecipes = allRecipes.map((recipe) => ({
+        id: recipe.id,
+        title: recipe.title,
+        isUserSelected: existingIds.has(recipe.id), // Flag if user selected this recipe
+        ingredients: recipe.extendedIngredients
+          ? recipe.extendedIngredients
+              .map((ing) => ing.name?.toLowerCase() || "")
+              .filter((name) => name)
+          : [],
+        cuisines: recipe.cuisines || [],
+        dishTypes: recipe.dishTypes || [],
+        likes: recipe.likes || 0,
+        imageUrl: recipe.imageUrl,
+      }));
+
+      // FIRST ROUND OF SCORING: Apply our existing algorithm
+      const scoredRecipes = scoreRecipes(
+        allRecipes,
+        pantryItems,
+        get().mealPlan,
+        new Set()
+      );
+
+      // Create a map of day->mealTypes with recipes already assigned
+      const assignedSlots: Record<number, Record<string, string>> = {};
+      existingSelections.forEach((selection) => {
+        if (!assignedSlots[selection.dayIndex]) {
+          assignedSlots[selection.dayIndex] = {};
+        }
+        assignedSlots[selection.dayIndex][selection.mealType] =
+          selection.recipeId;
+      });
+
+      // Try to call GPT-4o-mini for enhanced recommendations, but fall back to rule-based if unavailable
+      const gptInput = {
+        recipes: simplifiedRecipes,
+        pantryItems: pantryWithExpiry,
+        soonToExpireItems: soonToExpireItems.slice(0, 10), // Top 10 soon to expire items
+        dietaryPreferences,
+        cuisinePreferences,
+        mealsPerDay,
+        daysInWeek: 7,
+        initialScores: scoredRecipes.map((r) => ({
+          id: r.id,
+          score: r.score,
+          isUserSelected: existingIds.has(r.id),
+        })),
+        existingAssignments: assignedSlots,
+      };
+
+      // Create prompt for GPT to optimize meal plan
+      const prompt = `
+      I need help creating a weekly meal plan that optimizes the use of pantry ingredients (especially those expiring soon), respects dietary preferences, avoids recipe repetition on the same day, and incorporates both user-selected recipes and similar suggested recipes for variety.
+
+      Here's the data:
+      ${JSON.stringify(gptInput, null, 2)}
+      
+      Please analyze this data and return a JSON object with the following structure:
+      {
+        "mealPlan": [
+          {
+            "dayIndex": 0-6,
+            "mealType": "breakfast" | "lunch" | "dinner",
+            "recipeId": "string",
+            "reasoning": "brief explanation of why this recipe was chosen"
+          },
+          ...
+        ],
+        "explanations": {
+          "pantryUsage": "explanation of how the plan uses pantry items efficiently",
+          "expiryOptimization": "explanation of how items close to expiry are prioritized",
+          "varietyStrategy": "explanation of how variety is maintained",
+          "suggestedRecipesUsage": "explanation of how the suggested similar recipes were incorporated"
+        }
+      }
+      
+      Rules for creating the meal plan:
+      1. No recipe should be used twice on the same day
+      2. Prioritize recipes using ingredients that will expire soon
+      3. Try to minimize food waste by using existing pantry items efficiently
+      4. Honor the existing meal assignments in existingAssignments
+      5. For each day, include the number of meals specified by mealsPerDay
+      6. Try to maintain variety across the week while using pantry items efficiently
+      7. Consider the initialScores as a starting point but you can adjust based on a more holistic view
+      8. Use a good mix of user-selected recipes (marked with isUserSelected=true) and similar suggested recipes
+      9. Group recipes with complementary ingredients together on the same day to maximize ingredient usage
+      `;
+
+      let finalMealPlan: any[] = [];
+      let gptResponse = null;
+      let explanationText = "";
+
+      // Try to get GPT recommendations first
+      try {
+        gptResponse = await callGptApi(prompt);
+      } catch (error) {
+        console.warn(
+          "Error calling GPT API, falling back to rule-based planning:",
+          error
+        );
+      }
+
+      // Use the enhanced GPT-based plan if available, otherwise use rule-based approach
+      if (
+        gptResponse &&
+        gptResponse.mealPlan &&
+        Array.isArray(gptResponse.mealPlan)
+      ) {
+        console.log(
+          "Using GPT-enhanced meal plan with similar recipe suggestions"
+        );
+        finalMealPlan = gptResponse.mealPlan;
+
+        // If we have explanations from GPT, save them for user feedback
+        if (gptResponse.explanations) {
+          explanationText = `
+🍽️ Pantry Usage: ${
+            gptResponse.explanations.pantryUsage ||
+            "Optimized for efficient pantry usage"
+          }
+
+⏰ Expiry Strategy: ${
+            gptResponse.explanations.expiryOptimization ||
+            "Prioritized items expiring soon"
+          }
+
+🔄 Variety Approach: ${
+            gptResponse.explanations.varietyStrategy ||
+            "Ensured variety throughout the week"
+          }
+
+🆕 Similar Recipes: ${
+            gptResponse.explanations.suggestedRecipesUsage ||
+            "Added complementary recipes"
+          }
+          `.trim();
+
+          console.log("AI Explanation:", explanationText);
+        }
+      } else {
+        console.log("Using enhanced rule-based meal plan with similar recipes");
+        // Use our improved rule-based approach with all recipes (selected + similar)
+        finalMealPlan = generateRuleBasedMealPlan(
+          scoredRecipes,
+          mealsPerDay,
+          existingSelections
+        );
+
+        // Provide a basic explanation for the rule-based approach
+        explanationText =
+          "Your meal plan has been optimized using ingredients about to expire, with a mix of your selected recipes and similar suggestions. No recipe is repeated on the same day, and the plan prioritizes efficient use of your pantry items.";
+      }
+
+      // Clear previous meal plan except for existing selections
+      const keepMeals = get().mealPlan.filter((meal) =>
+        existingSelections.some(
+          (sel) =>
+            sel.dayIndex === meal.dayIndex && sel.mealType === meal.mealType
+        )
+      );
+
+      set({ mealPlan: keepMeals });
+
+      // Add new meals to the plan
+      for (const meal of finalMealPlan) {
+        // Skip if this slot already has a recipe (from existingSelections)
+        const existingMeal = keepMeals.find(
+          (m) => m.dayIndex === meal.dayIndex && m.mealType === meal.mealType
+        );
+
+        if (existingMeal) continue;
+
+        // Find the full recipe object
+        const recipeToAdd = allRecipes.find((r) => r.id === meal.recipeId);
+        if (recipeToAdd) {
+          // Add to meal plan
+          const scoredRecipe =
+            scoredRecipes.find((r) => r.id === meal.recipeId) || recipeToAdd;
+          get().addToMealPlan(
+            scoredRecipe,
+            meal.dayIndex,
+            meal.mealType as "breakfast" | "lunch" | "dinner"
+          );
+        }
+      }
+
+      // Update state with scored recipes and the explanation
+      set((state) => ({
+        suggestedRecipes: scoredRecipes,
+        isLoading: false,
+        // Store the explanation in the error field temporarily so we can access it when showing success message
+        error: explanationText.length > 0 ? explanationText : null,
+      }));
+    } catch (error) {
+      console.error("Error generating smart meal plan:", error);
       set({
         error: "Failed to generate meal plan. Please try again.",
         isLoading: false,
@@ -251,6 +618,158 @@ export const useMealPlannerStore = create<MealPlanState>((set, get) => ({
   },
 }));
 
+// NEW: Rule-based meal planning algorithm as fallback
+function generateRuleBasedMealPlan(
+  scoredRecipes: Array<Recipe & { score: number }>,
+  mealsPerDay: number,
+  existingSelections: { recipeId: string; dayIndex: number; mealType: string }[]
+): any[] {
+  const mealTypes = ["breakfast", "lunch", "dinner"].slice(0, mealsPerDay);
+  const mealPlan: any[] = [];
+  const maxUsagePerRecipe = Math.ceil((7 * mealsPerDay) / scoredRecipes.length);
+
+  console.log(
+    `Setting max usage per recipe to ${maxUsagePerRecipe} based on ${scoredRecipes.length} available recipes`
+  );
+
+  // Make a deep copy of the scored recipes array to avoid modifying the original
+  let allRecipes = [...scoredRecipes].sort((a, b) => b.score - a.score);
+
+  // Create a map of day->mealTypes with recipes already assigned
+  const assignedSlots: Record<number, Record<string, string>> = {};
+  existingSelections.forEach((selection) => {
+    if (!assignedSlots[selection.dayIndex]) {
+      assignedSlots[selection.dayIndex] = {};
+    }
+    assignedSlots[selection.dayIndex][selection.mealType] = selection.recipeId;
+  });
+
+  // Create a map to track recipes used on each day to avoid same-day repetition
+  const recipesUsedPerDay: Record<number, Set<string>> = {};
+  for (let day = 0; day < 7; day++) {
+    recipesUsedPerDay[day] = new Set<string>();
+
+    // Add existing selections to the used recipes set
+    if (assignedSlots[day]) {
+      Object.values(assignedSlots[day]).forEach((recipeId) => {
+        recipesUsedPerDay[day].add(recipeId);
+      });
+    }
+  }
+
+  // Create a map to track total recipe usage across the week
+  const recipeUsageCount: Record<string, number> = {};
+  scoredRecipes.forEach((recipe) => {
+    recipeUsageCount[recipe.id] = 0;
+  });
+
+  // Track existing assignments
+  existingSelections.forEach((selection) => {
+    recipeUsageCount[selection.recipeId] =
+      (recipeUsageCount[selection.recipeId] || 0) + 1;
+  });
+
+  // Loop through each day and meal type
+  for (let day = 0; day < 7; day++) {
+    for (const mealType of mealTypes) {
+      // Skip if this slot already has a recipe assigned
+      if (assignedSlots[day]?.[mealType]) {
+        continue;
+      }
+
+      // Filter recipes not already used on this day
+      let availableForDay = allRecipes.filter(
+        (recipe) => !recipesUsedPerDay[day].has(recipe.id)
+      );
+
+      // Also filter by recipes that haven't hit their max usage limit
+      let availableByUsage = availableForDay.filter(
+        (recipe) => (recipeUsageCount[recipe.id] || 0) < maxUsagePerRecipe
+      );
+
+      // If we have recipes available that haven't hit their usage limit, use those
+      if (availableByUsage.length > 0) {
+        availableForDay = availableByUsage;
+      } else if (availableForDay.length === 0) {
+        console.log(
+          `All recipes have been used max times, resetting recipe usage for day ${day}`
+        );
+        // If no recipes available for this day, check if we can reset counting
+        availableForDay = allRecipes.filter(
+          (recipe) => !recipesUsedPerDay[day].has(recipe.id)
+        );
+
+        if (availableForDay.length === 0) {
+          console.log(
+            `Still no available recipes after reset, using all recipes`
+          );
+          // If still no recipes, use any recipe (to fill all slots)
+          availableForDay = allRecipes;
+        }
+      }
+
+      // Get the best recipe for this slot (highest score with lowest usage)
+      availableForDay.sort((a, b) => {
+        // First compare usage count
+        const usageA = recipeUsageCount[a.id] || 0;
+        const usageB = recipeUsageCount[b.id] || 0;
+
+        if (usageA !== usageB) {
+          return usageA - usageB; // Prefer recipes used less often
+        }
+
+        // If usage count is the same, compare by score
+        return b.score - a.score;
+      });
+
+      const selectedRecipe = availableForDay[0];
+
+      if (selectedRecipe) {
+        // Update tracking data
+        recipesUsedPerDay[day].add(selectedRecipe.id);
+        recipeUsageCount[selectedRecipe.id] =
+          (recipeUsageCount[selectedRecipe.id] || 0) + 1;
+
+        console.log(
+          `Adding ${
+            selectedRecipe.title
+          } to day ${day} for ${mealType}, usage count: ${
+            recipeUsageCount[selectedRecipe.id]
+          }`
+        );
+
+        // Add to meal plan
+        mealPlan.push({
+          dayIndex: day,
+          mealType,
+          recipeId: selectedRecipe.id,
+          reasoning: `Selected based on pantry ingredients and variety`,
+        });
+
+        // Move this recipe to the end of the list to promote variety
+        allRecipes = [
+          ...allRecipes.filter((r) => r.id !== selectedRecipe.id),
+          // Return the recipe with a slightly reduced score
+          { ...selectedRecipe, score: selectedRecipe.score * 0.85 },
+        ];
+      }
+    }
+  }
+
+  // Log final meal plan statistics
+  const mealsCreated = mealPlan.length;
+  const totalMealsNeeded = 7 * mealsPerDay - existingSelections.length;
+  console.log(
+    `Optimized meal plan created with ${mealsCreated} meals out of ${totalMealsNeeded} needed`
+  );
+
+  // Count unique recipes
+  const uniqueRecipeIds = new Set(mealPlan.map((meal) => meal.recipeId));
+  console.log(`Found ${uniqueRecipeIds.size} unique recipes in the meal plan`);
+
+  return mealPlan;
+}
+
 // Scoring function for recipes
 function scoreRecipes(
   recipes: Recipe[],
@@ -329,7 +848,7 @@ function scoreRecipes(
       ).length;
 
       // Check if recipe is a user favorite
-      const isFavorite = recipe.likes > 100; // Simplified check for demo purposes
+      const isFavorite = recipe.likes ? recipe.likes > 100 : false; // Simplified check with null check
 
       // Calculate how many days this recipe appears in the meal plan
       let recipeDayCount = 0;

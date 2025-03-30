@@ -37,6 +37,7 @@ import {
   UtensilsCrossed,
   Soup,
   ShoppingCart,
+  Sparkles,
 } from "lucide-react-native";
 import { Recipe, RecipeIngredient } from "@/types";
 import { usePantryStore } from "@/store/pantryStore";
@@ -158,8 +159,10 @@ export default function MealPlanScreen() {
   const [isGeneratingOptimizedPlan, setIsGeneratingOptimizedPlan] =
     useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [isGeneratingSmartPlan, setIsGeneratingSmartPlan] = useState(false);
+  const [hasShownFeatureNotice, setHasShownFeatureNotice] = useState(true);
 
-  // Calculate number of meals needed based on user preferences
+  // Check number of meals needed based on user preferences
   const mealsPerDay = preferences.mealsPerDay || 3;
 
   useEffect(() => {
@@ -263,6 +266,15 @@ export default function MealPlanScreen() {
     }
   };
 
+  // Helper function to check if a recipe was originally selected by the user
+  const isUserSelectedRecipe = useCallback(
+    (recipeId: string) => {
+      const userSelectedIds = new Set(selectedRecipes.map((r) => r.id));
+      return userSelectedIds.has(recipeId);
+    },
+    [selectedRecipes]
+  );
+
   // Render a meal item that's already in the plan
   const renderMealItem = (meal: MealPlanItem) => {
     // Find the recipe in suggested recipes to get the detailed score info
@@ -275,6 +287,9 @@ export default function MealPlanScreen() {
       (m) => m.recipeId === meal.recipeId
     ).length;
     const isRepeated = occurrenceCount > 1;
+
+    // Check if this is a user-selected recipe or an AI suggestion
+    const isUserSelected = isUserSelectedRecipe(meal.recipeId);
 
     return (
       <View style={styles.mealCard}>
@@ -295,6 +310,11 @@ export default function MealPlanScreen() {
             {isRepeated && (
               <View style={styles.repeatBadge}>
                 <Text style={styles.repeatBadgeText}>{occurrenceCount}x</Text>
+              </View>
+            )}
+            {!isUserSelected && (
+              <View style={styles.aiSuggestedBadge}>
+                <Text style={styles.aiSuggestedText}>AI</Text>
               </View>
             )}
           </View>
@@ -569,310 +589,32 @@ export default function MealPlanScreen() {
         "Please select recipes from the Recipes tab first.",
         [{ text: "OK" }]
       );
-      setIsGeneratingOptimizedPlan(false);
       return;
     }
 
     setIsGeneratingOptimizedPlan(true);
-    // Hide any expanded meal slots and suggestions during generation to prevent nested scroll issues
+    // Hide any expanded meal slots and suggestions during generation
     setExpandedMeal(null);
     setShowSuggestions(false);
 
     try {
-      // Clear existing meal plan
-      clearMealPlan();
+      // Clear the existing meal plan first
+      await useMealPlannerStore.getState().clearMealPlan();
 
-      // Get all pantry items with their expiry dates
-      const pantryItems = usePantryStore.getState().items;
-
-      // Total number of meals needed based on user preference
-      const mealsPerDay = preferences.mealsPerDay || 3;
-      const totalMealsNeeded = mealsPerDay * 7;
-
-      console.log(
-        `Starting meal planning: Need ${totalMealsNeeded} meals with ${selectedRecipes.length} selected recipes`
-      );
-
-      // Store meals that will be added to the plan
-      const mealsToAdd: {
-        recipe: ScoredRecipe;
-        day: number;
-        mealType: MealType;
-      }[] = [];
-
-      // Track selected ingredients to apply bonus to other recipes
-      const selectedIngredients = new Set<string>();
-
-      // Track recipes usage (how many times each recipe has been used)
-      const recipeUsage: Record<
-        string,
-        { count: number; lastUsedDay: number }
-      > = {};
-
-      // Initialize recipeUsage tracking for all selected recipes to make sure we use them all
-      selectedRecipes.forEach((recipe) => {
-        recipeUsage[recipe.id] = { count: 0, lastUsedDay: -1 };
-      });
-
-      // Clone the selected recipes array to manipulate scores
-      // Combine with suggestedRecipes to get the score information
-      const recipesWithScores = selectedRecipes.map((recipe) => {
-        // Try to find this recipe in suggestedRecipes to get its score
-        const scoredVersion = suggestedRecipes.find((r) => r.id === recipe.id);
-        if (scoredVersion) {
-          return scoredVersion;
-        }
-
-        // If not found in suggestedRecipes, calculate a score based on pantry items
-        // Calculate expiry-based score as described in help modal
-        let baseScore = 0;
-        const recipeIngredients = recipe.extendedIngredients
-          ? recipe.extendedIngredients
-              .map((ing) => ing.name?.toLowerCase() || "")
-              .filter((name) => name)
-          : [];
-
-        // Check if recipe ingredients match any pantry items
-        recipeIngredients.forEach((ingredient) => {
-          const matchingPantryItems = pantryItems.filter((item) =>
-            item.name.toLowerCase().includes(ingredient)
-          );
-
-          // Add score for each matching pantry item (10/days_left)
-          matchingPantryItems.forEach((item) => {
-            if (item.expiryDate) {
-              const daysLeft = getDaysUntilExpiry(item.expiryDate);
-              baseScore += 10 / Math.max(1, daysLeft);
-            }
-          });
-        });
-
-        // Ensure minimum score of 1
-        baseScore = Math.max(1, baseScore);
-
-        return {
-          ...recipe,
-          score: baseScore,
-          calculatedScore: {
-            baseScore: baseScore,
-            overlapBonus: 0,
-            totalScore: baseScore,
-          },
-        };
-      });
-
-      let workingRecipes = [...recipesWithScores] as ScoredRecipe[];
-
-      // Sort recipes by score in descending order
-      workingRecipes.sort((a, b) => b.score - a.score);
-
-      console.log(`Using ${workingRecipes.length} selected recipes`);
-
-      // Loop through each day and each meal type to fill the plan
-      for (let day = 0; day < 7; day++) {
-        // Only loop through the number of meals per day that the user wants
-        const mealsForThisDay = Math.min(mealsPerDay, MEAL_TYPES.length);
-
-        for (
-          let mealTypeIndex = 0;
-          mealTypeIndex < mealsForThisDay;
-          mealTypeIndex++
-        ) {
-          if (
-            workingRecipes.length === 0 &&
-            Object.keys(recipeUsage).length === 0
-          ) {
-            console.log(
-              `No more recipes available at day ${day}, meal ${mealTypeIndex}`
-            );
-            break;
-          }
-
-          // Get the meal type for this slot
-          const mealType = MEAL_TYPES[mealTypeIndex];
-
-          // Find the best recipe considering usage limitations
-          // First, try to find recipes that haven't been used yet or haven't been used on consecutive days
-          const availableRecipes = workingRecipes.filter((r) => {
-            const usage = recipeUsage[r.id];
-            // Allow a recipe if:
-            // 1. It hasn't been used too many times (max 3 times per week)
-            // 2. It wasn't used the previous day (to avoid repetition on consecutive days)
-            return (
-              usage &&
-              usage.count < 3 &&
-              (usage.lastUsedDay === -1 || day - usage.lastUsedDay > 1)
-            );
-          });
-
-          // If no recipes meet our ideal criteria, relax the consecutive day restriction
-          const fallbackRecipes =
-            availableRecipes.length > 0
-              ? availableRecipes
-              : workingRecipes.filter(
-                  (r) => recipeUsage[r.id] && recipeUsage[r.id].count < 3
-                );
-
-          // If still no available recipes, reset all recipes for reuse
-          if (fallbackRecipes.length === 0) {
-            console.log(
-              `All recipes have been used max times, resetting recipe usage for day ${day}`
-            );
-            // Reset recipe usage for recipes not used in the last 2 days
-            Object.keys(recipeUsage).forEach((id) => {
-              if (day - recipeUsage[id].lastUsedDay > 2) {
-                recipeUsage[id].count = 0;
-              }
-            });
-            // Recalculate available recipes after reset
-            const resetRecipes = workingRecipes.filter(
-              (r) => recipeUsage[r.id].count < 3
-            );
-            if (resetRecipes.length === 0) {
-              console.log(
-                `Still no available recipes after reset, using all recipes`
-              );
-              // If still no recipes available, use all recipes
-              Object.keys(recipeUsage).forEach((id) => {
-                recipeUsage[id].count = 0;
-              });
-            }
-          }
-
-          // Get the best recipe from available ones (or all if none are available)
-          const recipesToChooseFrom =
-            fallbackRecipes.length > 0 ? fallbackRecipes : workingRecipes;
-          const topRecipe =
-            recipesToChooseFrom.length > 0
-              ? recipesToChooseFrom[0]
-              : workingRecipes[0];
-
-          if (!topRecipe) {
-            console.log(
-              `No recipes available for day ${day}, meal ${mealTypeIndex}`
-            );
-            continue;
-          }
-
-          // Update recipe usage tracking
-          recipeUsage[topRecipe.id].count++;
-          recipeUsage[topRecipe.id].lastUsedDay = day;
-
-          console.log(
-            `Adding ${
-              topRecipe.title
-            } to day ${day} for ${mealType}, usage count: ${
-              recipeUsage[topRecipe.id].count
-            }`
-          );
-
-          // Store for later addition to the meal plan
-          mealsToAdd.push({
-            recipe: topRecipe,
-            day,
-            mealType,
-          });
-
-          // Extract ingredients from the selected recipe to boost scores of recipes with overlapping ingredients
-          const recipeIngredients = topRecipe.extendedIngredients
-            ? topRecipe.extendedIngredients
-                .map((ing) => ing.name?.toLowerCase() || "")
-                .filter((name) => name)
-            : [];
-
-          // Add these ingredients to our tracking set
-          recipeIngredients.forEach((ing) => selectedIngredients.add(ing));
-
-          // Adjust scores for remaining recipes based on ingredient overlap
-          workingRecipes = workingRecipes
-            .map((recipe) => {
-              // If this recipe has been used too many times, reduce its score dramatically
-              if (recipeUsage[recipe.id].count >= 3) {
-                return {
-                  ...recipe,
-                  score: 0,
-                };
-              }
-
-              // Reduce score slightly if used recently
-              let recencyPenalty = 0;
-              if (recipeUsage[recipe.id].lastUsedDay !== -1) {
-                const daysSinceLastUse =
-                  day - recipeUsage[recipe.id].lastUsedDay;
-                if (daysSinceLastUse <= 1) {
-                  recencyPenalty = 10; // Big penalty for consecutive days
-                } else if (daysSinceLastUse <= 3) {
-                  recencyPenalty = 5; // Smaller penalty for recent use
-                }
-              }
-
-              const recipeIngs = recipe.extendedIngredients
-                ? recipe.extendedIngredients
-                    .map((ing) => ing.name?.toLowerCase() || "")
-                    .filter((name) => name)
-                : [];
-
-              // Count ingredients that overlap with our selection
-              const overlapCount = recipeIngs.filter((ing) =>
-                selectedIngredients.has(ing)
-              ).length;
-
-              // Apply a bonus to the score for ingredient overlap
-              const overlapBonus = overlapCount * 3; // 3 points per overlapping ingredient
-
-              // Store the original and new scores for display
-              const baseScore = recipe.score || 0;
-              const calculatedScore = {
-                baseScore: baseScore,
-                overlapBonus: overlapBonus,
-                totalScore: Math.max(
-                  0,
-                  baseScore + overlapBonus - recencyPenalty
-                ),
-              };
-
-              return {
-                ...recipe,
-                score: calculatedScore.totalScore,
-                calculatedScore,
-              };
-            })
-            .sort((a, b) => b.score - a.score); // Resort by new scores
-        }
-      }
-
-      // Now actually add all the meals to the plan
-      mealsToAdd.forEach(({ recipe, day, mealType }) => {
-        // We need to cast mealType to ensure TypeScript recognizes it as a valid meal type
-        addToMealPlan(
-          recipe,
-          day,
-          mealType as "breakfast" | "lunch" | "dinner"
+      // Call the original meal planning function
+      await useMealPlannerStore
+        .getState()
+        .generateMealPlan(
+          Array.from(preferences.dietaryPreferences || new Set()),
+          Array.from(preferences.cuisinePreferences || new Set())
         );
-      });
 
-      console.log(
-        `Optimized meal plan created with ${mealsToAdd.length} meals out of ${totalMealsNeeded} needed`
+      // Show success message with Alert
+      Alert.alert(
+        "Meal Plan Created",
+        "Your meal plan has been optimized using our rule-based algorithm to reduce food waste. It ensures no recipes are repeated within the same day.",
+        [{ text: "Great!" }]
       );
-
-      // If we didn't create a full week, let the user know
-      if (mealsToAdd.length < totalMealsNeeded) {
-        setTimeout(() => {
-          Alert.alert(
-            "Partial Meal Plan Created",
-            `Created ${mealsToAdd.length} out of ${totalMealsNeeded} meal slots. To fill more slots, add more recipes from the Recipes tab.`,
-            [{ text: "OK" }]
-          );
-        }, 500);
-      } else if (selectedRecipes.length < totalMealsNeeded) {
-        setTimeout(() => {
-          Alert.alert(
-            "Meal Plan Created With Repetition",
-            `Your meal plan has been created with some recipes appearing multiple times during the week. Add more recipes in the Recipes tab for more variety.`,
-            [{ text: "OK" }]
-          );
-        }, 500);
-      }
     } catch (error) {
       console.error("Error generating optimized meal plan:", error);
       Alert.alert(
@@ -884,7 +626,84 @@ export default function MealPlanScreen() {
     }
   }, [selectedRecipes, preferences, clearMealPlan, addToMealPlan]);
 
-  // Add a help modal to explain the scoring system
+  // Update the generateSmartMealPlan function to remove the New Feature popup
+  const generateSmartMealPlan = useCallback(async () => {
+    if (selectedRecipes.length === 0) {
+      Alert.alert(
+        "No Recipes Selected",
+        "Please select recipes from the Recipes tab first.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    setIsGeneratingSmartPlan(true);
+    // Hide any expanded meal slots and suggestions during generation
+    setExpandedMeal(null);
+    setShowSuggestions(false);
+
+    try {
+      // Collect existing selections to preserve them
+      const existingSelections = mealPlan.map((meal) => ({
+        recipeId: meal.recipeId,
+        dayIndex: meal.dayIndex,
+        mealType: meal.mealType,
+      }));
+
+      // Call the smart meal planning function with the correct preferences properties
+      await useMealPlannerStore
+        .getState()
+        .generateSmartMealPlan(
+          Array.from(preferences.dietaryPreferences || new Set()),
+          Array.from(preferences.cuisinePreferences || new Set()),
+          preferences.mealsPerDay || 3,
+          existingSelections
+        );
+
+      // Get the explanation from the store if available
+      const planExplanation = useMealPlannerStore.getState().error;
+
+      // Show standard success message without special notification
+      Alert.alert(
+        "Meal Plan Created",
+        "Your meal plan has been optimized with AI to minimize food waste and use expiring items first. Similar recipes have been suggested to enhance variety.",
+        [{ text: "Great!" }]
+      );
+
+      // Clear the explanation from the store
+      useMealPlannerStore.getState().error = null;
+    } catch (error) {
+      console.error("Error generating smart meal plan:", error);
+
+      // Check if it might be an API key issue
+      const errorString = String(error);
+      if (
+        errorString.includes("API key") ||
+        errorString.includes("authentication")
+      ) {
+        Alert.alert(
+          "API Key Required",
+          "To use the AI-powered meal planning, you need to add your OpenAI API key in the .env file. For now, a rule-based approach will be used instead.",
+          [
+            {
+              text: "Learn More",
+              onPress: () => setShowHelpModal(true),
+            },
+            { text: "OK" },
+          ]
+        );
+      } else {
+        Alert.alert(
+          "Error",
+          "An error occurred while generating your meal plan. Falling back to rule-based optimization."
+        );
+      }
+    } finally {
+      setIsGeneratingSmartPlan(false);
+    }
+  }, [selectedRecipes, preferences, mealPlan, setShowHelpModal]);
+
+  // Update the renderHelpModal function to include information about the new smart meal planning feature
   const renderHelpModal = () => {
     return (
       <Modal
@@ -895,26 +714,79 @@ export default function MealPlanScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>How Recipe Scoring Works</Text>
+            <Text style={styles.modalTitle}>Meal Planning Features</Text>
 
             <ScrollView
               style={styles.modalScrollContent}
               contentContainerStyle={styles.modalContentContainer}
             >
               <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>
+                <Text style={[styles.modalSubtitle, { color: Colors.primary }]}>
                   Our Goal: Minimize Food Waste
                 </Text>
                 <Text style={styles.modalText}>
-                  The meal planner uses a special algorithm to create a meal
-                  plan that helps reduce food waste by prioritizing ingredients
-                  that will expire soon.
+                  The meal planner uses special algorithms to create meal plans
+                  that help reduce food waste by prioritizing ingredients that
+                  will expire soon.
                 </Text>
               </View>
 
               <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>
-                  Recipe Scoring Formula:
+                <Text style={[styles.modalSubtitle, { color: Colors.success }]}>
+                  NEW: AI Smart Meal Planning with Similar Recipe Suggestions
+                </Text>
+                <Text style={styles.modalText}>
+                  Our enhanced AI-powered meal planning system now goes beyond
+                  your selected recipes to find similar, complementary dishes
+                  that can help reduce food waste and add variety:
+                </Text>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Preserves your existing meal selections
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Intelligently finds similar recipes based on your
+                    preferences
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Prioritizes recipes that use ingredients about to expire
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Ensures no recipe repetition on the same day
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Uses AI to discover complementary recipes that work well
+                    together
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <View style={styles.bullet} />
+                  <Text style={styles.modalText}>
+                    Provides AI insights about why recipes were selected
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.modalSection}>
+                <Text style={[styles.modalSubtitle, { color: Colors.primary }]}>
+                  Regular Optimization
+                </Text>
+                <Text style={styles.modalText}>
+                  The basic optimization uses our scoring formula to assign
+                  recipes to each day, but only considers your selected recipes:
                 </Text>
                 <Text style={styles.formulaText}>
                   Base Score = Sum(10 / days_left) for each pantry item
@@ -928,51 +800,97 @@ export default function MealPlanScreen() {
 
               <View style={styles.modalSection}>
                 <Text style={styles.modalSubtitle}>
-                  Ingredient Overlap Bonus:
-                </Text>
-                <Text style={styles.formulaText}>
-                  +3 points for each shared ingredient with other selected meals
+                  How to Identify AI Suggested Recipes:
                 </Text>
                 <Text style={styles.modalText}>
-                  As recipes are selected, other recipes that use the same
-                  ingredients get bonus points. This encourages efficient use of
-                  ingredients across multiple meals.
+                  Recipes that were automatically suggested by the AI (not part
+                  of your original selection) are marked with a small green "AI"
+                  badge in the bottom left corner.
                 </Text>
+                <View style={styles.badgeExample}>
+                  <View style={styles.aiSuggestedBadge}>
+                    <Text style={styles.aiSuggestedText}>AI</Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.modalText,
+                      { marginLeft: 8, marginBottom: 0 },
+                    ]}
+                  >
+                    This label indicates a recipe suggested by AI
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>Selection Process:</Text>
-                <Text style={styles.modalText}>
-                  1. Calculate scores for all recipes
+                <Text style={styles.modalSubtitle}>
+                  Difference Between Options:
                 </Text>
-                <Text style={styles.modalText}>
-                  2. Select the recipe with highest score
-                </Text>
-                <Text style={styles.modalText}>
-                  3. Add +3 point bonus to remaining recipes for each shared
-                  ingredient
-                </Text>
-                <Text style={styles.modalText}>
-                  4. Repeat until we have filled the meal plan
-                </Text>
-              </View>
+                <View style={styles.comparisonTable}>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonHeader}>Feature</Text>
+                    <Text style={styles.comparisonHeader}>Optimize</Text>
+                    <Text style={styles.comparisonHeader}>AI Smart Plan</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Preserves selections
+                    </Text>
+                    <Text style={styles.comparisonCell}>No</Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Uses expiry dates
+                    </Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                    <Text style={styles.comparisonCell}>Yes+</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Avoids same-day repetition
+                    </Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Suggests similar recipes
+                    </Text>
+                    <Text style={styles.comparisonCell}>No</Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Recipe suggestions
+                    </Text>
+                    <Text style={styles.comparisonCell}>Selected only</Text>
+                    <Text style={styles.comparisonCell}>AI enhanced</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>Uses OpenAI</Text>
+                    <Text style={styles.comparisonCell}>No</Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                  </View>
+                  <View style={styles.comparisonRow}>
+                    <Text style={styles.comparisonFeature}>
+                      Provides insights
+                    </Text>
+                    <Text style={styles.comparisonCell}>No</Text>
+                    <Text style={styles.comparisonCell}>Yes</Text>
+                  </View>
+                </View>
 
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>Recipe Repetition:</Text>
-                <Text style={styles.modalText}>
-                  When you have fewer recipes than needed for a full week, the
-                  app will intelligently repeat recipes while trying to maintain
-                  variety. Recipes can be used up to 3 times per week, but not
-                  on consecutive days when possible. Repeated meals are marked
-                  with a small badge showing how many times they appear in your
-                  plan.
-                </Text>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>Score Breakdown:</Text>
-                <Text style={styles.modalText}>
-                  Each recipe shows its score as (Base + Overlap Bonus)
+                <Text
+                  style={[
+                    styles.modalText,
+                    { marginTop: 10, fontStyle: "italic" },
+                  ]}
+                >
+                  Both options now avoid recipe repetition within the same day!
+                  The AI Smart Plan also adds similar recipe suggestions based
+                  on your preferences and pantry ingredients to maximize variety
+                  and minimize waste.
                 </Text>
               </View>
 
@@ -981,14 +899,9 @@ export default function MealPlanScreen() {
                 <Text style={styles.modalText}>
                   The meal planner respects your preference for how many meals
                   you want per day. This is configured in your Settings tab.
-                  Currently, you have {mealsPerDay}{" "}
-                  {mealsPerDay === 1 ? "meal" : "meals"} per day configured.
-                  This means your meal plan will include only the first{" "}
-                  {mealsPerDay} meal types:{" "}
-                  {MEAL_TYPES.slice(0, mealsPerDay)
-                    .map((mealType) => getMealDisplayName(mealType))
-                    .join(", ")}
-                  .
+                  Currently, you have {preferences.mealsPerDay || 3}{" "}
+                  {preferences.mealsPerDay === 1 ? "meal" : "meals"} per day
+                  configured.
                 </Text>
               </View>
             </ScrollView>
@@ -1460,78 +1373,49 @@ export default function MealPlanScreen() {
       <View style={styles.contentContainer}>
         {selectedRecipes.length > 0 ? (
           <>
-            <View style={styles.optimizeContainer}>
-              <TouchableOpacity
-                style={styles.optimizeButton}
-                onPress={() => {
-                  Alert.alert(
-                    "Auto-Generate Meal Plan",
-                    "This will create an optimal meal plan for the week based on your preferences, with a focus on ingredients that will expire soon. Any existing plan will be replaced.",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Generate Plan",
-                        onPress: generateOptimizedMealPlan,
-                      },
-                    ]
-                  );
-                }}
-                disabled={isGeneratingOptimizedPlan}
-              >
-                <Brain size={16} color="#FFFFFF" />
-                <Text style={styles.optimizeButtonText}>
-                  {isGeneratingOptimizedPlan
-                    ? "Optimizing..."
-                    : "Auto-Generate Smart Meal Plan"}
-                </Text>
-              </TouchableOpacity>
+            <Animatable.View
+              animation="fadeInUp"
+              duration={500}
+              style={[
+                styles.optimizeContainer,
+                { paddingBottom: insets.bottom > 0 ? insets.bottom : 16 },
+              ]}
+            >
+              <Text style={styles.optimizeTitle}>Meal Planning</Text>
+              <Text style={styles.modalText}>
+                Create your meal plan with AI-powered suggestions:
+              </Text>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.smartPlanButton,
+                    isGeneratingSmartPlan && styles.buttonDisabled,
+                    { flex: 1 }, // Make the button take the full width
+                  ]}
+                  onPress={generateSmartMealPlan}
+                  disabled={isGeneratingSmartPlan}
+                >
+                  <Sparkles size={18} color="#FFFFFF" />
+                  <Text style={styles.optimizeButtonText}>
+                    {isGeneratingSmartPlan ? "Planning..." : "AI Smart Plan"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {mealPlan.length > 0 && (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.optimizeButton,
-                      { marginTop: 8, backgroundColor: Colors.primary },
-                    ]}
-                    onPress={() => {
-                      Alert.alert(
-                        "Regenerate Meal Plan",
-                        "This will clear your current meal plan and create a new one. Continue?",
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: "Regenerate",
-                            onPress: () => {
-                              clearMealPlan();
-                              generateOptimizedMealPlan();
-                            },
-                          },
-                        ]
-                      );
-                    }}
-                    disabled={isGeneratingOptimizedPlan}
-                  >
-                    <RefreshCw size={16} color="#FFFFFF" />
-                    <Text style={styles.optimizeButtonText}>
-                      Refresh With Different Recipes
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.optimizeButton,
-                      { marginTop: 8, backgroundColor: Colors.success },
-                    ]}
-                    onPress={generateShoppingList}
-                  >
-                    <ShoppingCart size={16} color="#FFFFFF" />
-                    <Text style={styles.optimizeButtonText}>
-                      Generate Shopping List from Meal Plan
-                    </Text>
-                  </TouchableOpacity>
-                </>
+                <TouchableOpacity
+                  style={styles.shoppingListButton}
+                  onPress={generateShoppingList}
+                  disabled={isGeneratingOptimizedPlan}
+                >
+                  <ShoppingCart size={18} color="#FFFFFF" />
+                  <Text style={styles.optimizeButtonText}>
+                    Generate Shopping List
+                  </Text>
+                </TouchableOpacity>
               )}
-            </View>
+            </Animatable.View>
 
             <View style={styles.daySelector}>
               <TouchableOpacity
@@ -1756,27 +1640,52 @@ const styles = StyleSheet.create({
     color: Colors.textLight,
   },
   optimizeContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    marginBottom: 8,
+    padding: 16,
+    margin: 16,
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    shadowColor: Colors.shadowDark,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  optimizeTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
   optimizeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.primary,
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  shoppingListButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: Colors.success,
     padding: 12,
     borderRadius: 8,
-    shadowColor: Colors.shadowDark || "rgba(0,0,0,0.2)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    marginTop: 8,
+  },
+  buttonDisabled: {
+    backgroundColor: Colors.textLight,
   },
   optimizeButtonText: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold",
+    fontWeight: "600",
     marginLeft: 8,
   },
   modalOverlay: {
@@ -1949,5 +1858,96 @@ const styles = StyleSheet.create({
   suggestionsEmptyText: {
     fontSize: 14,
     color: Colors.textLight,
+  },
+  headerButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  headerButtonDisabled: {
+    backgroundColor: Colors.background + "80",
+  },
+  headerButtonText: {
+    color: Colors.primary,
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+  bulletPoint: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 4,
+    paddingLeft: 8,
+  },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.primary,
+    marginRight: 8,
+  },
+  comparisonTable: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  comparisonRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  comparisonHeader: {
+    flex: 1,
+    padding: 8,
+    fontWeight: "bold",
+    backgroundColor: Colors.primaryLight,
+    textAlign: "center",
+  },
+  comparisonFeature: {
+    flex: 1,
+    padding: 8,
+    fontWeight: "500",
+  },
+  comparisonCell: {
+    flex: 1,
+    padding: 8,
+    textAlign: "center",
+  },
+  smartPlanButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.success,
+    padding: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  helpButton: {
+    alignSelf: "center",
+    backgroundColor: "transparent",
+    marginTop: 8,
+  },
+  aiSuggestedBadge: {
+    position: "absolute",
+    bottom: 5,
+    left: 5,
+    backgroundColor: Colors.success,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  aiSuggestedText: {
+    color: "white",
+    fontSize: 8,
+    fontWeight: "bold",
+  },
+  badgeExample: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 8,
+    backgroundColor: Colors.background,
+    padding: 8,
+    borderRadius: 8,
   },
 });

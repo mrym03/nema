@@ -33,13 +33,13 @@ export interface Recipe {
   id: string;
   title: string;
   imageUrl: string;
-  readyInMinutes: number;
+  readyInMinutes?: number;
   servings: number;
-  sourceUrl: string;
-  summary: string;
+  sourceUrl?: string;
+  summary?: string;
   usedIngredientCount: number;
   missedIngredientCount: number;
-  likes: number;
+  likes?: number;
   instructions?: string;
   extendedIngredients?: RecipeIngredient[];
   // Dietary information
@@ -48,6 +48,8 @@ export interface Recipe {
   glutenFree?: boolean;
   dairyFree?: boolean;
   diets?: string[];
+  cuisines?: string[];
+  dishTypes?: string[];
 }
 
 export interface RecipeIngredient {
