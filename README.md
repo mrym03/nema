@@ -21,18 +21,41 @@ We've added a new AI-powered meal planning feature that optimizes your weekly me
 - Preserves your existing meal selections when re-optimizing
 - Intelligently combines ingredients to minimize shopping needs
 
-### Setting Up OpenAI API Key
+### Setting Up Environment Variables
 
-To use the AI-powered meal planning feature, you'll need an OpenAI API key with access to the GPT-4o-mini model:
+To use all features of the app, you'll need to set up the following environment variables:
 
-1. Sign up for an OpenAI API key at [https://openai.com/api/](https://openai.com/api/)
-2. Create a `.env` file in the project root with the following content:
+1. Copy the `.env.example` file to create your `.env` file:
+
    ```
-   EXPO_PUBLIC_OPENAI_API_KEY=your-api-key-here
+   cp .env.example .env
    ```
+
+2. Add your API keys to the `.env` file:
+
+   ```
+   # Required for AI features
+   EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+
+   # Required for recipe information (if using Spoonacular)
+   EXPO_PUBLIC_SPOONACULAR_API_KEY=your_spoonacular_api_key_here
+
+   # For barcode scanning
+   EXPO_PUBLIC_UPC_DATABASE_API_KEY=your_upc_database_api_key_here
+
+   # For OCR capabilities (if using)
+   EXPO_PUBLIC_GOOGLE_CLOUD_VISION_API_KEY=your_vision_api_key_here
+
+   # Optional Firebase configuration (if using)
+   EXPO_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+   EXPO_PUBLIC_FIREBASE_APP_ID=your_firebase_app_id
+   ```
+
 3. Restart the development server
 
-If no API key is provided, the app will fall back to the rule-based optimization algorithm.
+> ⚠️ **Security Note**: Never commit your `.env` file to version control. The `.gitignore` file is configured to exclude this file. Only the `.env.example` file with placeholder values should be committed.
+
+If no API keys are provided, the app will fall back to local functionality or mock data where possible.
 
 ### How AI Meal Planning Works
 

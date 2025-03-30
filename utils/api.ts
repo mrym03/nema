@@ -9,23 +9,27 @@ import { SPOONACULAR_API_KEY } from "../constants/apiKeys";
 
 // Firebase configuration
 const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "zero-waste-pantry.firebaseapp.com",
-  projectId: "zero-waste-pantry",
-  storageBucket: "zero-waste-pantry.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123def456",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain:
+    process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ||
+    "zero-waste-pantry.firebaseapp.com",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "zero-waste-pantry",
+  storageBucket:
+    process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    "zero-waste-pantry.appspot.com",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "",
 };
 
 // Spoonacular API for recipes
 const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
 
 // UPC database API for barcode scanning
-const UPC_DATABASE_API_KEY = "E08F735364A32F6FAFC0C06F803E0B9D";
+const UPC_DATABASE_API_KEY = process.env.EXPO_PUBLIC_UPC_DATABASE_API_KEY || "";
 const UPC_DATABASE_BASE_URL = "https://api.upcdatabase.org/product";
 
 // Replace Spoonacular API with TheMealDB API
-const THEMEALDB_API_KEY = "1"; // Using the test API key "1" for development
+const THEMEALDB_API_KEY = process.env.EXPO_PUBLIC_THEMEALDB_API_KEY || "1"; // Using the test API key "1" for development
 const THEMEALDB_BASE_URL = "https://www.themealdb.com/api/json/v1/1";
 
 // Development mode flag - true if using placeholder Supabase credentials
@@ -303,37 +307,44 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1500;
 
 // Helper function to wait
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Helper function to make API calls with retries
 async function fetchWithRetry(
-  url: string, 
-  options: RequestInit = {}, 
+  url: string,
+  options: RequestInit = {},
   retries = MAX_RETRIES
 ): Promise<any> {
   try {
     const response = await fetch(url, options);
-    
+
     // Handle rate limit
     if (response.status === 429) {
       if (retries > 0) {
-        console.log(`Rate limited (429), retrying in ${RETRY_DELAY}ms... (${retries} retries left)`);
+        console.log(
+          `Rate limited (429), retrying in ${RETRY_DELAY}ms... (${retries} retries left)`
+        );
         await wait(RETRY_DELAY);
         return fetchWithRetry(url, options, retries - 1);
       } else {
-        throw new Error('Rate limit exceeded. Please try again later.');
+        throw new Error("Rate limit exceeded. Please try again later.");
       }
     }
-    
+
     // Check for success
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
     }
-    
+
     return await response.json();
   } catch (error: any) {
-    if (retries > 0 && error.message !== 'Rate limit exceeded. Please try again later.') {
-      console.log(`API request failed, retrying in ${RETRY_DELAY}ms... (${retries} retries left)`);
+    if (
+      retries > 0 &&
+      error.message !== "Rate limit exceeded. Please try again later."
+    ) {
+      console.log(
+        `API request failed, retrying in ${RETRY_DELAY}ms... (${retries} retries left)`
+      );
       await wait(RETRY_DELAY);
       return fetchWithRetry(url, options, retries - 1);
     }
@@ -343,19 +354,25 @@ async function fetchWithRetry(
 
 // Enhanced recipe API functions with retry logic - export these
 export async function fetchRecipesByIngredients(
-  ingredients: string[], 
+  ingredients: string[],
   dietaryPreferences: string[] = [],
   cuisinePreferences: string[] = []
 ): Promise<Recipe[]> {
   try {
-    console.log(`Using TheMealDB as fallback due to Spoonacular API quota issues`);
-    
+    console.log(
+      `Using TheMealDB as fallback due to Spoonacular API quota issues`
+    );
+
     // Use TheMealDB API instead since it's free
-    const mealDbRecipes = await fetchMealDbRecipes(ingredients, dietaryPreferences, cuisinePreferences);
+    const mealDbRecipes = await fetchMealDbRecipes(
+      ingredients,
+      dietaryPreferences,
+      cuisinePreferences
+    );
     return mealDbRecipes;
   } catch (error) {
     console.error("Error fetching recipes by ingredients:", error);
-    
+
     // Return an empty array instead of throwing to prevent app crashes
     return [];
   }
@@ -364,8 +381,10 @@ export async function fetchRecipesByIngredients(
 // Enhanced recipe details API function with retry logic
 export async function getRecipeDetails(id: string): Promise<Recipe> {
   try {
-    console.log(`Using TheMealDB as fallback for recipe details due to Spoonacular API quota issues`);
-    
+    console.log(
+      `Using TheMealDB as fallback for recipe details due to Spoonacular API quota issues`
+    );
+
     // Use TheMealDB API for details instead
     return await getMealDbRecipeDetails(id);
   } catch (error) {

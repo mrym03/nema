@@ -9,16 +9,17 @@ import { usePantryStore } from "@/store/pantryStore";
 import { useShoppingListStore } from "@/store/shoppingListStore";
 
 // Initialize OpenAI client - use environment variable in production
-const OPENAI_API_KEY =
-  process.env.EXPO_PUBLIC_OPENAI_API_KEY || "your-api-key-here";
+const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || "";
 
 console.log(
   "OpenAI API Key available:",
   OPENAI_API_KEY ? "Yes (length: " + OPENAI_API_KEY.length + ")" : "No"
 );
 
+// Create OpenAI instance with API key from environment
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true,
 });
 
 // Helper function to normalize ingredient names for better matching
