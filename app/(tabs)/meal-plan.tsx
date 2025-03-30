@@ -39,7 +39,7 @@ import {
   ShoppingCart,
   Sparkles,
 } from "lucide-react-native";
-import { Recipe, RecipeIngredient } from "@/types";
+import { Recipe, RecipeIngredient, FoodCategory } from "@/types";
 import { usePantryStore } from "@/store/pantryStore";
 import { useShoppingListStore } from "@/store/shoppingListStore";
 import EmptyState from "@/components/EmptyState";
@@ -53,34 +53,7 @@ import { generateId } from "@/utils/helpers";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import HeaderBar from "@/components/HeaderBar";
-
-// Define the FoodCategory type
-type FoodCategory =
-  | "fruits"
-  | "vegetables"
-  | "meat"
-  | "seafood"
-  | "dairy"
-  | "grains"
-  | "condiments"
-  | "spices"
-  | "other";
-
-// Define a type for recipes with score and analysis information
-interface ScoredRecipe extends Recipe {
-  score: number;
-  calculatedScore?: {
-    baseScore: number;
-    overlapBonus: number;
-    totalScore: number;
-  };
-  analysis?: {
-    pantryItemsUsed: number;
-    newIngredients: number;
-    overlappingCount: number;
-    isFavorite: boolean;
-  };
-}
+import { OpenAI } from "openai";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const DAYS_OF_WEEK = [
@@ -132,6 +105,28 @@ const getDaysUntilExpiry = (expiryDate: string): number => {
 
   return Math.max(1, diffDays); // Ensure at least 1 day
 };
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true,
+});
+
+// Define a type for recipes with score and analysis information
+interface ScoredRecipe extends Recipe {
+  score: number;
+  calculatedScore?: {
+    baseScore: number;
+    overlapBonus: number;
+    totalScore: number;
+  };
+  analysis?: {
+    pantryItemsUsed: number;
+    newIngredients: number;
+    overlappingCount: number;
+    isFavorite: boolean;
+  };
+}
 
 export default function MealPlanScreen() {
   const router = useRouter();
@@ -1008,6 +1003,131 @@ export default function MealPlanScreen() {
     return "other";
   };
 
+  // Add a new function to optimize the shopping list using GPT-4o
+  const optimizeShoppingList = async (
+    shoppingItems: RecipeIngredient[],
+    recipes: ScoredRecipe[]
+  ): Promise<RecipeIngredient[]> => {
+    try {
+      // Build context for GPT-4o with all recipes and their ingredients
+      const recipeContexts = recipes
+        .map((recipe) => {
+          return `Recipe: ${
+            recipe.title || (recipe as any).strMeal || "Unknown Recipe"
+          }
+Ingredients: ${
+            recipe.extendedIngredients?.map((ing) => ing.name).join(", ") ||
+            "No ingredients available"
+          }
+        `;
+        })
+        .join("\n\n");
+
+      // Create the shopping list context with current quantities
+      const shoppingListContext = shoppingItems
+        .map((item) => {
+          return `${item.name}: ${item.amount || 1} ${
+            item.unit || "item"
+          } (category: ${item.category || "other"})`;
+        })
+        .join("\n");
+
+      // Prompt for GPT-4o to optimize the shopping list
+      const prompt = `
+I have a meal plan with the following recipes:
+
+${recipeContexts}
+
+Here's my current shopping list with ${shoppingItems.length} items:
+
+${shoppingListContext}
+
+Please optimize this shopping list to reduce the number of different ingredients while still making it possible to cook all the planned meals. Specifically:
+
+1. Identify similar ingredients that can be substituted (e.g., using one type of pasta for multiple dishes)
+2. For perishable items (especially vegetables and fruits), suggest using the same vegetable across multiple recipes to avoid waste
+3. Consolidate similar spices or condiments where possible
+4. Consider what a typical home cook would realistically buy and use
+5. Consider substituting ingredients that serve similar purposes in recipes (e.g. green vegetables)
+
+Your response should be structured in valid JSON format that I can parse, like this:
+{
+  "optimizedIngredients": [
+    {
+      "name": "ingredient name",
+      "amount": number,
+      "unit": "unit",
+      "category": "category",
+      "recipeName": "recipe names this is used in",
+      "substitutionNotes": "explanation of any substitutions made (if applicable)"
+    },
+    ...
+  ],
+  "substitutionRationale": "Brief explanation of the overall substitution strategy"
+}
+
+Focus on practicality - the goal is a realistic shopping list for a home cook who wants to minimize waste and grocery purchases.
+`;
+
+      console.log("Sending shopping list optimization request to OpenAI...");
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a practical meal planning assistant that helps optimize shopping lists to reduce waste and make cooking more efficient. You understand ingredient substitutions and how to consolidate shopping lists.",
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      // Parse the optimized shopping list
+      const content = response.choices[0].message.content;
+      console.log("Received optimized shopping list from OpenAI");
+
+      let optimizedData;
+      try {
+        optimizedData = JSON.parse(content as string);
+        console.log(
+          `Optimized list contains ${optimizedData.optimizedIngredients.length} items (down from ${shoppingItems.length})`
+        );
+
+        // Convert the optimized data back to RecipeIngredient format
+        const optimizedItems: RecipeIngredient[] =
+          optimizedData.optimizedIngredients.map((item: any) => {
+            return {
+              id: generateId(),
+              name: item.name,
+              amount: item.amount,
+              unit: item.unit,
+              category: item.category as FoodCategory,
+              recipeName: item.recipeName,
+              // Store substitution notes in the original field for reference
+              original: item.substitutionNotes || undefined,
+            };
+          });
+
+        // Show the user a message about the optimization
+        Alert.alert(
+          "Shopping List Optimized",
+          `Your shopping list has been optimized from ${shoppingItems.length} to ${optimizedItems.length} items.\n\n${optimizedData.substitutionRationale}`,
+          [{ text: "OK" }]
+        );
+
+        return optimizedItems;
+      } catch (e) {
+        console.error("Failed to parse OpenAI optimization response:", e);
+        return shoppingItems; // Return original list if optimization fails
+      }
+    } catch (error) {
+      console.error("Error optimizing shopping list:", error);
+      return shoppingItems; // Return original list if optimization fails
+    }
+  };
+
   // Add a new function to generate a shopping list from the meal plan
   const generateShoppingList = async () => {
     try {
@@ -1223,7 +1343,7 @@ export default function MealPlanScreen() {
       });
 
       // Convert to shopping list items
-      const shoppingItems: RecipeIngredient[] = Array.from(
+      const initialShoppingItems: RecipeIngredient[] = Array.from(
         ingredientMap.values()
       ).map((ingredient) => {
         // Get the list of recipe names that use this ingredient
@@ -1232,7 +1352,7 @@ export default function MealPlanScreen() {
         return {
           id: generateId(),
           name: ingredient.name,
-          quantity: ingredient.amount,
+          amount: ingredient.amount,
           unit: ingredient.unit,
           completed: false,
           addedOn: new Date().toISOString(),
@@ -1241,9 +1361,11 @@ export default function MealPlanScreen() {
         };
       });
 
-      console.log(`Generated ${shoppingItems.length} shopping list items`);
+      console.log(
+        `Generated ${initialShoppingItems.length} shopping list items`
+      );
 
-      if (shoppingItems.length === 0) {
+      if (initialShoppingItems.length === 0) {
         setIsGeneratingOptimizedPlan(false);
         Alert.alert(
           "No Ingredients Found",
@@ -1252,8 +1374,18 @@ export default function MealPlanScreen() {
         return;
       }
 
+      // OPTIMIZATION STEP: Use GPT-4o to optimize the shopping list
+      console.log("Optimizing shopping list with GPT-4o...");
+      const optimizedShoppingItems = await optimizeShoppingList(
+        initialShoppingItems,
+        enhancedRecipes as ScoredRecipe[]
+      );
+      console.log(
+        `Optimized shopping list from ${initialShoppingItems.length} to ${optimizedShoppingItems.length} items`
+      );
+
       // Add items to shopping list
-      addRecipeIngredients(shoppingItems);
+      addRecipeIngredients(optimizedShoppingItems);
 
       // Stop loading indicator
       setIsGeneratingOptimizedPlan(false);
@@ -1261,7 +1393,7 @@ export default function MealPlanScreen() {
       // Notification of success
       Alert.alert(
         "Shopping List Generated",
-        `Added ${shoppingItems.length} items to your shopping list`,
+        `Added ${optimizedShoppingItems.length} items to your shopping list`,
         [
           {
             text: "View List",
