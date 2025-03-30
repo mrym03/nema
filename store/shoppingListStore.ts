@@ -20,6 +20,7 @@ interface ShoppingListState {
   removeItem: (id: string) => void;
   toggleItemCompleted: (id: string) => void;
   clearCompletedItems: () => void;
+  clearAllItems: () => void;
   addRecipeIngredients: (ingredients: RecipeIngredient[]) => void;
   moveItemToPantry: (id: string) => void;
 }
@@ -197,6 +198,10 @@ export const useShoppingListStore = create<ShoppingListState>()(
         set((state) => ({
           items: state.items.filter((item) => !item.completed),
         }));
+      },
+
+      clearAllItems: () => {
+        set({ items: [] });
       },
 
       // New function to move item from shopping list to pantry

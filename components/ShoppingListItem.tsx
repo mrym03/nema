@@ -18,6 +18,8 @@ interface ShoppingListItemProps {
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
   onMoveToPantry?: (id: string) => void;
+  selectMode?: boolean;
+  isSelected?: boolean;
 }
 
 const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
@@ -25,6 +27,8 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
   onToggle,
   onRemove,
   onMoveToPantry,
+  selectMode = false,
+  isSelected = false,
 }) => {
   const category = CATEGORIES[item.category];
   const router = useRouter();
@@ -62,21 +66,38 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
   };
 
   return (
-    <View style={styles.container}>
-      <Pressable
-        style={({ pressed }) => [
-          styles.checkbox,
-          item.completed && styles.checkboxCompleted,
-          pressed && styles.pressed,
-        ]}
-        onPress={() => onToggle(item.id)}
-      >
-        {item.completed && <Check size={16} color="#fff" />}
-      </Pressable>
+    <View style={[styles.container, isSelected && styles.selectedContainer]}>
+      {selectMode ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.checkbox,
+            isSelected && styles.checkboxSelected,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onToggle(item.id)}
+        >
+          {isSelected && <Check size={16} color="#fff" />}
+        </Pressable>
+      ) : (
+        <Pressable
+          style={({ pressed }) => [
+            styles.checkbox,
+            item.completed && styles.checkboxCompleted,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => onToggle(item.id)}
+        >
+          {item.completed && <Check size={16} color="#fff" />}
+        </Pressable>
+      )}
 
       <View style={styles.content}>
         <Text
-          style={[styles.name, item.completed && styles.completedText]}
+          style={[
+            styles.name,
+            item.completed && !selectMode && styles.completedText,
+            isSelected && styles.selectedText,
+          ]}
           numberOfLines={1}
         >
           {item.name}
@@ -107,41 +128,43 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
         )}
       </View>
 
-      <View style={styles.actionsContainer}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.actionButton,
-            styles.editButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={handleEdit}
-        >
-          <Edit size={16} color="#fff" />
-        </Pressable>
-
-        {item.completed && onMoveToPantry && (
+      {!selectMode && (
+        <View style={styles.actionsContainer}>
           <Pressable
             style={({ pressed }) => [
               styles.actionButton,
-              styles.moveButton,
+              styles.editButton,
               pressed && styles.pressed,
             ]}
-            onPress={handleMoveToPantry}
+            onPress={handleEdit}
           >
-            <ShoppingBag size={16} color="#fff" />
+            <Edit size={16} color="#fff" />
           </Pressable>
-        )}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.deleteButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => onRemove(item.id)}
-        >
-          <Trash2 size={20} color={Colors.danger} />
-        </Pressable>
-      </View>
+          {item.completed && onMoveToPantry && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.actionButton,
+                styles.moveButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={handleMoveToPantry}
+            >
+              <ShoppingBag size={16} color="#fff" />
+            </Pressable>
+          )}
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.deleteButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => onRemove(item.id)}
+          >
+            <Trash2 size={20} color={Colors.danger} />
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 };
@@ -160,6 +183,11 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  selectedContainer: {
+    backgroundColor: `${Colors.primary}10`,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
   checkbox: {
     width: 24,
     height: 24,
@@ -171,6 +199,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checkboxCompleted: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  checkboxSelected: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
@@ -189,6 +221,10 @@ const styles = StyleSheet.create({
   completedText: {
     textDecorationLine: "line-through",
     color: Colors.textLight,
+  },
+  selectedText: {
+    color: Colors.primary,
+    fontWeight: "600",
   },
   detailsRow: {
     flexDirection: "row",
