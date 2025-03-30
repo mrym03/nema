@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   StyleSheet,
   View,
@@ -11,6 +11,8 @@ import {
   Switch,
   Platform,
   StatusBar,
+  Animated,
+  Dimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -22,6 +24,9 @@ import { identifyMultipleFoodItemsWithOpenAI } from "@/utils/openaiVision";
 import { USE_MOCK_OCR } from "@/utils/env";
 import { usePantryStore } from "@/store/pantryStore";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { BlurView } from "expo-blur";
+import { Ionicons } from "@expo/vector-icons";
 
 // Food category default images
 const categoryImages = {
@@ -145,13 +150,38 @@ interface MultiItemScannerProps {
   onClose: () => void;
 }
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
 export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
   const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [detectedItems, setDetectedItems] = useState<FoodItemDetection[]>([]);
+  const [cameraMode, setCameraMode] = useState<boolean>(true);
+  const [cameraReady, setCameraReady] = useState(false);
+  const cameraRef = useRef<any>(null);
+
   const router = useRouter();
   const { addItem } = usePantryStore();
   const insets = useSafeAreaInsets();
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const [permission, requestPermission] = useCameraPermissions();
+
+  React.useEffect(() => {
+    (async () => {
+      if (permission && !permission.granted) {
+        await requestPermission();
+      }
+    })();
+
+    // Start rotation animation for the loader
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [permission]);
 
   // Function to get an appropriate image for the food item
   const getImageUrl = (item: {
@@ -272,104 +302,227 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
     setDetectedItems(updatedItems);
   };
 
-  const pickImage = async () => {
-    // Request camera permissions
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  const takePicture = async () => {
+    if (!cameraRef.current || !cameraReady) return;
 
-    if (status !== "granted") {
-      Alert.alert(
-        "Permission Denied",
-        "Camera permission is required to scan products."
-      );
-      return;
-    }
-
-    // Launch camera
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
+    try {
       setLoading(true);
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+      });
 
-      try {
-        // Process the image
-        const manipResult = await ImageManipulator.manipulateAsync(
-          result.assets[0].uri,
-          [{ resize: { width: 800 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-        );
+      setImage(photo.uri);
+      setCameraMode(false);
 
-        let identifiedItems: {
-          name: string;
-          category: FoodCategory;
-          quantity: number;
-          unit?: string;
-        }[] = [];
+      // Process the image
+      const manipResult = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      );
 
-        // Attempt to identify using OpenAI if enabled
-        if (!USE_MOCK_OCR) {
-          try {
-            console.log(
-              "Attempting to call OpenAI Vision API for multiple items..."
-            );
-            identifiedItems = await identifyMultipleFoodItemsWithOpenAI(
-              manipResult.uri
-            );
-            console.log(
-              "OpenAI API response:",
-              JSON.stringify(identifiedItems)
-            );
-          } catch (error: any) {
-            console.error(
-              "OpenAI Vision API error details:",
-              error.response?.data || error.message || error
-            );
-            Alert.alert(
-              "API Error",
-              "There was an error contacting the AI service. Using simulated data instead."
-            );
-          }
+      let identifiedItems: {
+        name: string;
+        category: FoodCategory;
+        quantity: number;
+        unit?: string;
+      }[] = [];
+
+      // Attempt to identify using OpenAI if enabled
+      if (!USE_MOCK_OCR) {
+        try {
+          console.log(
+            "Attempting to call OpenAI Vision API for multiple items..."
+          );
+          identifiedItems = await identifyMultipleFoodItemsWithOpenAI(
+            manipResult.uri
+          );
+          console.log("OpenAI API response:", JSON.stringify(identifiedItems));
+        } catch (error: any) {
+          console.error(
+            "OpenAI Vision API error details:",
+            error.response?.data || error.message || error
+          );
+          Alert.alert(
+            "API Error",
+            "There was an error contacting the AI service. Using simulated data instead."
+          );
         }
-
-        // Use simulated data if OpenAI failed or mock OCR is enabled
-        if (identifiedItems.length === 0) {
-          // Simulated items for testing
-          identifiedItems = [
-            { name: "Apple", category: "fruits", quantity: 3, unit: "pcs" },
-            { name: "Milk", category: "dairy", quantity: 1, unit: "gallon" },
-            { name: "Bread", category: "bakery", quantity: 1, unit: "loaf" },
-            { name: "Chicken", category: "meat", quantity: 1, unit: "lb" },
-            {
-              name: "Carrot",
-              category: "vegetables",
-              quantity: 4,
-              unit: "pcs",
-            },
-          ];
-          console.log("Using simulated items:", identifiedItems);
-        }
-
-        // Convert to FoodItemDetection with selected flag and image URL
-        const itemsWithSelection = identifiedItems.map((item) => ({
-          ...item,
-          selected: true, // Selected by default
-          imageUrl: getImageUrl(item), // Add the image URL
-        }));
-
-        setDetectedItems(itemsWithSelection);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error processing image:", error);
-        setLoading(false);
-        Alert.alert("Error", "Failed to process the image. Please try again.");
       }
+
+      // Use simulated data if OpenAI failed or mock OCR is enabled
+      if (identifiedItems.length === 0) {
+        // Simulated items for testing
+        identifiedItems = [
+          { name: "Apple", category: "fruits", quantity: 3, unit: "pcs" },
+          { name: "Milk", category: "dairy", quantity: 1, unit: "gallon" },
+          { name: "Bread", category: "bakery", quantity: 1, unit: "loaf" },
+          { name: "Chicken", category: "meat", quantity: 1, unit: "lb" },
+          {
+            name: "Carrot",
+            category: "vegetables",
+            quantity: 4,
+            unit: "pcs",
+          },
+        ];
+        console.log("Using simulated items:", identifiedItems);
+      }
+
+      // Convert to FoodItemDetection with selected flag and image URL
+      const itemsWithSelection = identifiedItems.map((item) => ({
+        ...item,
+        selected: true, // Selected by default
+        imageUrl: getImageUrl(item), // Add the image URL
+      }));
+
+      setDetectedItems(itemsWithSelection);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error taking picture:", error);
+      setLoading(false);
+      Alert.alert("Error", "Failed to take picture. Please try again.");
     }
   };
+
+  const pickImageFromGallery = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        processCapturedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error("Error selecting image from gallery:", error);
+      Alert.alert("Error", "Failed to select image. Please try again.");
+    }
+  };
+
+  const processCapturedImage = async (imageUri: string) => {
+    setImage(imageUri);
+    setCameraMode(false);
+    setLoading(true);
+
+    try {
+      // Process the image
+      const manipResult = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      let identifiedItems: {
+        name: string;
+        category: FoodCategory;
+        quantity: number;
+        unit?: string;
+      }[] = [];
+
+      // Attempt to identify using OpenAI if enabled
+      if (!USE_MOCK_OCR) {
+        try {
+          console.log(
+            "Attempting to call OpenAI Vision API for multiple items..."
+          );
+          identifiedItems = await identifyMultipleFoodItemsWithOpenAI(
+            manipResult.uri
+          );
+          console.log("OpenAI API response:", JSON.stringify(identifiedItems));
+        } catch (error: any) {
+          console.error(
+            "OpenAI Vision API error details:",
+            error.response?.data || error.message || error
+          );
+          Alert.alert(
+            "API Error",
+            "There was an error contacting the AI service. Using simulated data instead."
+          );
+        }
+      }
+
+      // Use simulated data if OpenAI failed or mock OCR is enabled
+      if (identifiedItems.length === 0) {
+        // Simulated items for testing
+        identifiedItems = [
+          { name: "Apple", category: "fruits", quantity: 3, unit: "pcs" },
+          { name: "Milk", category: "dairy", quantity: 1, unit: "gallon" },
+          { name: "Bread", category: "bakery", quantity: 1, unit: "loaf" },
+          { name: "Chicken", category: "meat", quantity: 1, unit: "lb" },
+          {
+            name: "Carrot",
+            category: "vegetables",
+            quantity: 4,
+            unit: "pcs",
+          },
+        ];
+        console.log("Using simulated items:", identifiedItems);
+      }
+
+      // Convert to FoodItemDetection with selected flag and image URL
+      const itemsWithSelection = identifiedItems.map((item) => ({
+        ...item,
+        selected: true, // Selected by default
+        imageUrl: getImageUrl(item), // Add the image URL
+      }));
+
+      setDetectedItems(itemsWithSelection);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error processing image:", error);
+      setLoading(false);
+      Alert.alert("Error", "Failed to process the image. Please try again.");
+    }
+  };
+
+  const returnToCamera = () => {
+    setImage(null);
+    setCameraMode(true);
+    setDetectedItems([]);
+  };
+
+  // Spin animation for the loading icon
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  if (!permission) {
+    // Camera permissions are still loading
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>Loading camera permissions...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionContainer}>
+        <Text style={styles.permissionText}>
+          Camera permission is required to use this feature.
+        </Text>
+        <TouchableOpacity
+          style={styles.permissionButton}
+          onPress={requestPermission}
+        >
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.permissionButton,
+            { marginTop: 12, backgroundColor: Colors.danger },
+          ]}
+          onPress={onClose}
+        >
+          <Text style={styles.permissionButtonText}>Close</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -381,46 +534,119 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
         },
       ]}
     >
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" />
+
       <View style={styles.header}>
-        <Text style={styles.title}>Multi-Item Scanner</Text>
-        <Text style={styles.subtitle}>
-          Take a photo containing multiple food items
-        </Text>
+        <View style={styles.titleContainer}>
+          <Text style={styles.title}>Pantry Scanner</Text>
+          <Text style={styles.subtitle}>
+            {cameraMode
+              ? "Snap a photo of multiple food items at once"
+              : detectedItems.length > 0
+              ? `${detectedItems.length} item${
+                  detectedItems.length !== 1 ? "s" : ""
+                } detected`
+              : "Processing image..."}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.closeIconButton}
+          onPress={onClose}
+          hitSlop={{ top: 20, right: 20, bottom: 20, left: 20 }}
+        >
+          <Ionicons name="close" size={28} color={Colors.textLight} />
+        </TouchableOpacity>
       </View>
 
-      {!image ? (
-        <TouchableOpacity style={styles.button} onPress={pickImage}>
-          <Text style={styles.buttonText}>Take Photo</Text>
-        </TouchableOpacity>
+      {cameraMode ? (
+        <View style={styles.cameraContainer}>
+          <View style={styles.cameraWrapper}>
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              onCameraReady={() => setCameraReady(true)}
+            />
+
+            <View style={styles.cameraOverlay}>
+              {/* Camera frame borders */}
+              <View style={styles.frameBorderTopLeft} />
+              <View style={styles.frameBorderTopRight} />
+              <View style={styles.frameBorderBottomLeft} />
+              <View style={styles.frameBorderBottomRight} />
+            </View>
+
+            <View style={styles.cameraControls}>
+              <TouchableOpacity
+                style={styles.galleryButton}
+                onPress={pickImageFromGallery}
+              >
+                <Ionicons name="images" size={26} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.captureButton}
+                onPress={takePicture}
+                disabled={!cameraReady}
+              >
+                <View style={styles.captureButtonInner} />
+              </TouchableOpacity>
+
+              <View style={styles.placeholderButton} />
+            </View>
+          </View>
+
+          <View style={styles.cameraHelpContainer}>
+            <Text style={styles.cameraHelpText}>
+              Position multiple food items in frame
+            </Text>
+          </View>
+        </View>
       ) : (
         <View style={styles.contentContainer}>
-          <View style={styles.imageContainer}>
-            <Image source={{ uri: image }} style={styles.image} />
+          <View style={styles.imagePreviewContainer}>
+            <Image
+              source={{ uri: image }}
+              style={styles.imagePreview}
+              contentFit="cover"
+            />
 
             {loading ? (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+              <BlurView
+                style={styles.loadingOverlay}
+                intensity={35}
+                tint="dark"
+              >
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="refresh-circle" size={60} color="#FFFFFF" />
+                </Animated.View>
                 <Text style={styles.loadingText}>
                   Identifying food items with AI...
                 </Text>
-              </View>
+              </BlurView>
             ) : null}
           </View>
 
           {detectedItems.length > 0 && !loading ? (
             <>
-              <Text style={styles.detectedItemsTitle}>
-                Detected Items (
-                {detectedItems.filter((item) => item.selected).length}/
-                {detectedItems.length} selected)
-              </Text>
+              <View style={styles.detectedHeader}>
+                <Text style={styles.detectedItemsTitle}>Detected Items</Text>
+                <Text style={styles.detectedItemsCount}>
+                  {detectedItems.filter((item) => item.selected).length}/
+                  {detectedItems.length} selected
+                </Text>
+              </View>
+
               <FlatList
                 data={detectedItems}
                 keyExtractor={(_, index) => `item-${index}`}
                 style={styles.itemList}
                 renderItem={({ item, index }) => (
-                  <View style={styles.itemRow}>
+                  <View
+                    style={[
+                      styles.itemRow,
+                      item.selected && styles.itemRowSelected,
+                    ]}
+                  >
                     <Image
                       source={item.imageUrl}
                       style={styles.itemImage}
@@ -430,10 +656,14 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
                     <View style={styles.itemInfo}>
                       <Text style={styles.itemName}>{item.name}</Text>
                       <View style={styles.itemDetails}>
-                        <Text style={styles.itemCategory}>{item.category}</Text>
-                        {item.quantity > 1 && (
+                        <View style={styles.categoryPill}>
+                          <Text style={styles.categoryText}>
+                            {item.category}
+                          </Text>
+                        </View>
+                        {item.quantity > 0 && (
                           <Text style={styles.itemQuantity}>
-                            Qty: {item.quantity} {item.unit || ""}
+                            {item.quantity} {item.unit || ""}
                           </Text>
                         )}
                       </View>
@@ -443,56 +673,61 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
                       onValueChange={() => toggleItemSelection(index)}
                       trackColor={{
                         false: "#767577",
-                        true: Colors.primaryLight,
+                        true: `${Colors.primary}80`,
                       }}
                       thumbColor={item.selected ? Colors.primary : "#f4f3f4"}
-                      ios_backgroundColor="#767577"
+                      ios_backgroundColor="#76757750"
                     />
                   </View>
                 )}
               />
 
-              <View style={styles.helpTextContainer}>
-                <Text style={styles.helpText}>
-                  You'll be able to review and edit each item's details before
-                  adding to your pantry
-                </Text>
+              <View style={styles.actionButtonsContainer}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={returnToCamera}
+                >
+                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>New Scan</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    styles.primaryActionButton,
+                    detectedItems.filter((item) => item.selected).length ===
+                      0 && styles.disabledButton,
+                  ]}
+                  onPress={handleReviewSelectedItems}
+                  disabled={
+                    detectedItems.filter((item) => item.selected).length === 0
+                  }
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={20}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.actionButtonText}>Add Selected</Text>
+                </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                style={[styles.button, styles.addButton]}
-                onPress={handleReviewSelectedItems}
-              >
-                <Text style={styles.buttonText}>
-                  Review & Edit{" "}
-                  {detectedItems.filter((item) => item.selected).length} Items
-                </Text>
-              </TouchableOpacity>
             </>
-          ) : null}
-
-          {!loading && (
-            <TouchableOpacity
-              style={detectedItems.length ? styles.rescanButton : styles.button}
-              onPress={pickImage}
-            >
-              <Text
-                style={
-                  detectedItems.length
-                    ? styles.rescanButtonText
-                    : styles.buttonText
-                }
-              >
-                {detectedItems.length ? "Scan Again" : "Take Photo"}
-              </Text>
-            </TouchableOpacity>
+          ) : (
+            !loading && (
+              <View style={styles.noResultsContainer}>
+                <Text style={styles.noResultsText}>Processing image...</Text>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={returnToCamera}
+                >
+                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.actionButtonText}>Take New Photo</Text>
+                </TouchableOpacity>
+              </View>
+            )
           )}
         </View>
       )}
-
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-        <Text style={styles.closeButtonText}>Close</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -501,109 +736,240 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-    padding: 16,
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: Colors.background,
+  },
+  permissionText: {
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+    color: Colors.text,
+  },
+  permissionButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  permissionButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
   },
   header: {
-    marginBottom: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    backgroundColor: Colors.background,
+  },
+  titleContainer: {
+    flex: 1,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: Colors.textDark,
-    marginBottom: 8,
+    color: Colors.text,
   },
   subtitle: {
-    fontSize: 16,
-    color: Colors.textLight,
-    marginBottom: 16,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    marginBottom: 20,
-    alignSelf: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  addButton: {
-    width: "100%",
-    marginTop: 10,
-  },
-  rescanButton: {
-    backgroundColor: Colors.card,
-    paddingVertical: 12,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  rescanButtonText: {
-    color: Colors.text,
     fontSize: 14,
-    fontWeight: "600",
+    color: Colors.textLight,
+    marginTop: 4,
+  },
+  closeIconButton: {
+    padding: 5,
+  },
+  cameraContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  cameraWrapper: {
+    width: "100%",
+    aspectRatio: 3 / 4,
+    alignSelf: "center",
+    position: "relative",
+    overflow: "hidden",
+    borderRadius: 16,
+  },
+  camera: {
+    flex: 1,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  frameBorderTopLeft: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: "#FFFFFF",
+    borderTopLeftRadius: 12,
+  },
+  frameBorderTopRight: {
+    position: "absolute",
+    top: 20,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderColor: "#FFFFFF",
+    borderTopRightRadius: 12,
+  },
+  frameBorderBottomLeft: {
+    position: "absolute",
+    bottom: 120,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: "#FFFFFF",
+    borderBottomLeftRadius: 12,
+  },
+  frameBorderBottomRight: {
+    position: "absolute",
+    bottom: 120,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderColor: "#FFFFFF",
+    borderBottomRightRadius: 12,
+  },
+  cameraControls: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    paddingHorizontal: 20,
+  },
+  galleryButton: {
+    padding: 12,
+  },
+  captureButton: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  captureButtonInner: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FFFFFF",
+  },
+  placeholderButton: {
+    width: 50,
+  },
+  cameraHelpContainer: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: "center",
+  },
+  cameraHelpText: {
+    fontSize: 14,
+    color: Colors.textLight,
+    textAlign: "center",
   },
   contentContainer: {
     flex: 1,
-    alignItems: "center",
-    width: "100%",
+    padding: 16,
   },
-  imageContainer: {
+  imagePreviewContainer: {
     width: "100%",
     aspectRatio: 4 / 3,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: "hidden",
-    marginBottom: 20,
+    marginBottom: 16,
     position: "relative",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  image: {
+  imagePreview: {
     width: "100%",
     height: "100%",
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
   },
   loadingText: {
-    color: "#fff",
-    marginTop: 10,
+    color: "#FFFFFF",
+    marginTop: 16,
+    fontSize: 16,
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  detectedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   detectedItemsTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: Colors.text,
-    alignSelf: "flex-start",
-    marginBottom: 10,
+  },
+  detectedItemsCount: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: "500",
   },
   itemList: {
-    width: "100%",
-    marginBottom: 10,
-    maxHeight: 200,
+    flex: 1,
+    marginBottom: 16,
   },
   itemRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 12,
+    padding: 14,
     backgroundColor: Colors.card,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: Colors.shadowLight,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  itemRowSelected: {
+    backgroundColor: `${Colors.primary}10`,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: `${Colors.primary}30`,
   },
   itemImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
-    backgroundColor: "#f0f0f0",
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 14,
+    backgroundColor: Colors.border,
   },
   itemInfo: {
     flex: 1,
@@ -612,47 +978,67 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: Colors.text,
-  },
-  itemCategory: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginTop: 2,
+    marginBottom: 4,
   },
   itemDetails: {
     flexDirection: "row",
     alignItems: "center",
   },
+  categoryPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: `${Colors.primary}20`,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  categoryText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: "500",
+  },
   itemQuantity: {
     fontSize: 14,
     color: Colors.textLight,
-    marginLeft: 5,
   },
-  helpTextContainer: {
-    padding: 12,
-    backgroundColor: Colors.card,
-    borderRadius: 8,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    width: "100%",
+  actionButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
   },
-  helpText: {
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.textLight,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  primaryActionButton: {
+    backgroundColor: Colors.primary,
+    flex: 2,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  actionButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
     fontSize: 14,
-    color: Colors.textLight,
-    textAlign: "center",
+    marginLeft: 8,
   },
-  closeButton: {
-    marginTop: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: Colors.danger,
-    borderRadius: 8,
-    alignSelf: "center",
-    marginBottom: 20,
+  noResultsContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
   },
-  closeButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
+  noResultsText: {
     fontSize: 16,
+    color: Colors.textLight,
+    marginBottom: 20,
+    textAlign: "center",
   },
 });
