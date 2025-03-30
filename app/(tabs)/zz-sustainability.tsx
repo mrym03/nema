@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +28,9 @@ import {
   X
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import HeaderBar from '@/components/HeaderBar';
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -249,15 +253,22 @@ const SustainabilityScreen = () => {
 
   return (
     <View style={styles.container}>
-      <HeaderComponent {...headerProps}>
-        <Text style={styles.title}>Sustainability Impact</Text>
-        <TouchableOpacity
-          style={styles.infoButton}
-          onPress={() => setShowInfoModal(true)}
-        >
-          <HelpCircle size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      </HeaderComponent>
+      <StatusBar style="dark" />
+      
+      <HeaderBar 
+        title="Sustainability"
+        subtitle="Track your impact"
+        rightButtons={
+          <>
+            <Pressable 
+              style={styles.iconButton}
+              onPress={() => setShowInfoModal(true)}
+            >
+              <Ionicons name="help-circle-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+          </>
+        }
+      />
       
       <ScrollView 
         style={styles.content}
@@ -786,6 +797,9 @@ const styles = StyleSheet.create({
     color: Colors.text,
     lineHeight: 20,
     marginBottom: 12,
+  },
+  iconButton: {
+    padding: 8,
   },
 });
 

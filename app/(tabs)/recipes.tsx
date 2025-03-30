@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,10 @@ import {
   Platform,
   RefreshControl,
   TouchableOpacity,
+  useWindowDimensions,
+  Image,
+  TextInput,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -28,6 +32,10 @@ import {
   List,
   Calendar,
 } from "lucide-react-native";
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
+import HeaderBar from '@/components/HeaderBar';
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -67,6 +75,13 @@ export default function RecipesScreen() {
   const { items } = usePantryStore();
   const { preferences } = usePreferences();
   const [refreshing, setRefreshing] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterIngredients, setFilterIngredients] = useState<string[]>([]);
+  const [filterDietaryPrefs, setFilterDietaryPrefs] = useState<string[]>([]);
+  const [filterCuisinePrefs, setFilterCuisinePrefs] = useState<string[]>([]);
+  const windowDimensions = useWindowDimensions();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showSearchModal, setShowSearchModal] = useState(false);
 
   // Function to extract ingredient names from pantry items
   const getIngredientNames = useCallback(() => {
@@ -220,33 +235,123 @@ export default function RecipesScreen() {
   const tabBarHeight = Platform.OS === "ios" ? 90 : 75;
   const bottomPadding = insets.bottom > 0 ? tabBarHeight : tabBarHeight + 10;
 
-  return (
-    <View style={[styles.container, { backgroundColor: Colors.primary }]}>
-      <HeaderComponent {...headerProps}>
-        <Text style={styles.title}>Recipes</Text>
-        <View style={styles.headerButtons}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={fetchRecipesFromPantry}
-            disabled={isLoading}
-          >
-            <RefreshCw size={20} color="#FFFFFF" />
-          </Pressable>
+  const handleRefresh = () => {
+    onRefresh();
+  };
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => router.push("../search-recipes")}
-          >
-            <Search size={20} color="#FFFFFF" />
-          </Pressable>
+  const toggleFilter = () => {
+    setShowFilter(!showFilter);
+  };
+
+  // New function to filter recipes based on search term
+  const filteredRecipes = useCallback(() => {
+    if (!searchTerm.trim()) {
+      return recipes;
+    }
+    
+    const term = searchTerm.toLowerCase().trim();
+    return recipes.filter(recipe => 
+      recipe.title.toLowerCase().includes(term) || 
+      recipe.summary?.toLowerCase().includes(term)
+    );
+  }, [recipes, searchTerm]);
+
+  // Add search modal component
+  const renderSearchModal = () => {
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showSearchModal}
+        onRequestClose={() => setShowSearchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.searchModalContainer}>
+            <View style={styles.searchHeader}>
+              <Text style={styles.searchModalTitle}>Search Recipes</Text>
+              <Pressable
+                style={styles.closeButton}
+                onPress={() => {
+                  setShowSearchModal(false);
+                  // Clear search when closing if nothing is found
+                  if (filteredRecipes().length === 0) {
+                    setSearchTerm("");
+                  }
+                }}
+              >
+                <Ionicons name="close" size={24} color={Colors.textDark} />
+              </Pressable>
+            </View>
+            
+            <View style={styles.searchInputContainer}>
+              <Ionicons name="search-outline" size={20} color={Colors.textLight} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Type recipe name..."
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+                autoFocus={true}
+                clearButtonMode="always"
+              />
+              {searchTerm.length > 0 && (
+                <Pressable onPress={() => setSearchTerm("")} style={styles.clearButton}>
+                  <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+                </Pressable>
+              )}
+            </View>
+            
+            <Text style={styles.resultCount}>
+              {filteredRecipes().length} {filteredRecipes().length === 1 ? 'recipe' : 'recipes'} found
+            </Text>
+            
+            <FlatList
+              data={filteredRecipes()}
+              renderItem={renderItem}
+              keyExtractor={(item) => item.id}
+              numColumns={2}
+              contentContainerStyle={styles.searchList}
+              ListEmptyComponent={
+                <View style={styles.noResults}>
+                  <Text style={styles.noResultsText}>No recipes found for "{searchTerm}"</Text>
+                  <TouchableOpacity 
+                    style={styles.resetButton}
+                    onPress={() => setSearchTerm("")}
+                  >
+                    <Text style={styles.resetButtonText}>Clear Search</Text>
+                  </TouchableOpacity>
+                </View>
+              }
+            />
+          </View>
         </View>
-      </HeaderComponent>
+      </Modal>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+      
+      <HeaderBar 
+        title="Recipes"
+        subtitle="Based on your pantry"
+        rightButtons={
+          <>
+            <Pressable
+              style={styles.iconButton}
+              onPress={fetchRecipesFromPantry}
+            >
+              <Ionicons name="refresh-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+            <Pressable 
+              style={styles.iconButton}
+              onPress={() => setShowSearchModal(true)}
+            >
+              <Ionicons name="search-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+          </>
+        }
+      />
 
       <View
         style={[
@@ -302,6 +407,15 @@ export default function RecipesScreen() {
           </>
         )}
       </View>
+
+      {showFilter && (
+        <View style={styles.filterContainer}>
+          <Text style={styles.filterTitle}>Filter Recipes</Text>
+          {/* Filter options would go here */}
+        </View>
+      )}
+      
+      {renderSearchModal()}
     </View>
   );
 }
@@ -309,6 +423,7 @@ export default function RecipesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   contentContainer: {
     flex: 1,
@@ -331,9 +446,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   iconButton: {
-    marginLeft: 16,
     padding: 8,
-    borderRadius: 20,
+    borderRadius: 8,
   },
   pressed: {
     opacity: 0.7,
@@ -413,5 +527,93 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginLeft: 10,
+  },
+  filterContainer: {
+    padding: 16,
+  },
+  filterTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: Colors.textDark,
+    marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  searchModalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+  },
+  searchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  searchModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.textDark,
+  },
+  closeButton: {
+    padding: 8,
+  },
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    margin: 16,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 0,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  clearButton: {
+    padding: 8,
+  },
+  searchList: {
+    padding: 16,
+    paddingTop: 0,
+  },
+  resultCount: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 14,
+    color: Colors.textLight,
+  },
+  noResults: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noResultsText: {
+    fontSize: 16,
+    color: Colors.textLight,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  resetButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  resetButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

@@ -66,11 +66,11 @@ function TabBar({ state, descriptors, navigation }: any) {
     ]}>
       {shouldUseGradient ? (
         <LinearGradient
-          colors={['rgba(255, 255, 255, 0.8)', 'rgba(255, 255, 255, 0.97)']}
+          colors={['#FFFFFF', '#F5F7FA']}
           style={styles.background}
         />
       ) : (
-        <View style={[styles.background, { backgroundColor: 'rgba(255, 255, 255, 0.95)' }]} />
+        <View style={[styles.background, { backgroundColor: '#FFFFFF' }]} />
       )}
       
       <View style={styles.tabsContainer}>
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 3,
     zIndex: 100,
   },
@@ -217,6 +217,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
+    borderBottomWidth: 0,
   },
   tabsContainer: {
     flexDirection: 'row',

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, Pressable, Text, View, Modal, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { Plus, X, ShoppingBag, Layers, Camera, Tag } from 'lucide-react-native';
+import { Plus, X, ShoppingBag, Layers, Camera, Tag, Edit, Scan } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 
 // Conditional imports to handle potential errors
@@ -253,66 +253,48 @@ const AddItemButton: React.FC<AddItemButtonProps> = ({
               {
                 opacity: menuOpacity,
                 transform: [
-                  { 
-                    scaleY: menuScaleY.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.85, 1]
-                    })
-                  },
-                  { 
-                    translateY: menuScaleY.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [100, 0]
-                    })
-                  }
-                ],
+                  { scaleY: menuScaleY },
+                  { translateY: menuScaleY.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [20, 0]
+                  })}
+                ]
               }
             ]}
           >
-            <BlurView intensity={25} tint="dark" style={styles.blurContainer}>
-              <View style={styles.handle} />
+            <View style={styles.menuHeader}>
+              <Text style={styles.menuTitle}>Add to Pantry</Text>
+              <TouchableOpacity onPress={closeMenu} style={styles.closeButton}>
+                <X size={24} color={Colors.textDark} />
+              </TouchableOpacity>
+            </View>
+            
+            <Animated.View 
+              style={[
+                styles.menuOptionsContainer,
+                { opacity: menuItemsOpacity }
+              ]}
+            >
+              <MenuOption
+                icon={<Edit size={24} color="#FFFFFF" />}
+                title="Add Manually"
+                description="Enter item details yourself"
+                color="#4A6FA5"
+                index={0}
+                onPress={handleAddSingleItem}
+                menuItemsOpacity={menuItemsOpacity}
+              />
               
-              <View style={styles.menuHeader}>
-                <Text style={styles.menuTitle}>Add to Pantry</Text>
-                <TouchableOpacity 
-                  onPress={closeMenu}
-                  style={styles.closeButton}
-                >
-                  <X size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              
-              <Animated.View style={{ opacity: menuItemsOpacity }}>
-                <View style={styles.menuItemsContainer}>
-                  <MenuOption 
-                    icon={<ShoppingBag size={24} color="#FFFFFF" />}
-                    title="Add Single Item"
-                    description="Manually add an item to your pantry"
-                    color="#63E2B7"
-                    index={0}
-                    onPress={handleAddSingleItem}
-                  />
-                  
-                  <MenuOption 
-                    icon={<Camera size={24} color="#FFFFFF" />}
-                    title="Scan Multiple Items"
-                    description="Add multiple items using your camera"
-                    color="#4990FD"
-                    index={1}
-                    onPress={handleMultiItemScan}
-                  />
-                  
-                  <MenuOption 
-                    icon={<Tag size={24} color="#FFFFFF" />}
-                    title="Scan Barcode"
-                    description="Add item by scanning its barcode"
-                    color="#FF8700"
-                    index={2}
-                    onPress={handleAddSingleItem}
-                  />
-                </View>
-              </Animated.View>
-            </BlurView>
+              <MenuOption
+                icon={<Camera size={24} color="#FFFFFF" />}
+                title="Camera (Automatic)"
+                description="Scan multiple items at once"
+                color="#E67E22"
+                index={1}
+                onPress={handleMultiItemScan}
+                menuItemsOpacity={menuItemsOpacity}
+              />
+            </Animated.View>
           </Animated.View>
         </Animated.View>
       </Modal>
@@ -327,6 +309,7 @@ interface MenuOptionProps {
   color: string;
   index: number;
   onPress: () => void;
+  menuItemsOpacity: any;
 }
 
 const MenuOption: React.FC<MenuOptionProps> = ({ 
@@ -335,40 +318,16 @@ const MenuOption: React.FC<MenuOptionProps> = ({
   description, 
   color,
   index,
-  onPress 
+  onPress,
+  menuItemsOpacity
 }) => {
   // Animation values
-  const scale = useRef(new Animated.Value(0.95)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
   
-  // Should use gradient if available
-  const shouldUseGradient = LinearGradient !== View;
-  
-  useEffect(() => {
-    // Animate in with staggered delay
-    Animated.sequence([
-      Animated.delay(100 * index),
-      Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.ease)
-        }),
-        Animated.spring(scale, {
-          toValue: 1,
-          friction: 6,
-          tension: 40,
-          useNativeDriver: true
-        })
-      ])
-    ]).start();
-  }, []);
-  
-  // Handle press animation
+  // Handle button press animations
   const handlePressIn = () => {
     Animated.timing(scale, {
-      toValue: 0.97,
+      toValue: 0.95,
       duration: 100,
       useNativeDriver: true,
       easing: Easing.out(Easing.ease)
@@ -378,46 +337,36 @@ const MenuOption: React.FC<MenuOptionProps> = ({
   const handlePressOut = () => {
     Animated.spring(scale, {
       toValue: 1,
-      friction: 4,
+      friction: 5,
+      tension: 40,
       useNativeDriver: true
     }).start();
   };
   
   return (
-    <Animated.View style={[
-      styles.menuOptionContainer,
-      {
-        opacity,
-        transform: [{ scale }]
-      }
-    ]}>
+    <Animated.View 
+      style={{
+        transform: [{ scale }],
+        opacity: menuItemsOpacity.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 1]
+        })
+      }}
+    >
       <TouchableOpacity
-        style={styles.menuOptionTouchable}
+        style={[styles.menuOption, { marginBottom: 12 }]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={0.9}
       >
-        <View style={styles.menuOptionContent}>
-          {shouldUseGradient ? (
-            <LinearGradient
-              colors={[color, color + '90']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.iconBackground}
-            >
-              {icon}
-            </LinearGradient>
-          ) : (
-            <View style={[styles.iconBackground, { backgroundColor: color }]}>
-              {icon}
-            </View>
-          )}
-          
-          <View style={styles.menuItemTextContainer}>
-            <Text style={styles.menuItemText}>{title}</Text>
-            <Text style={styles.menuItemDescription}>{description}</Text>
-          </View>
+        <View style={[styles.iconContainer, { backgroundColor: color }]}>
+          {icon}
+        </View>
+        
+        <View style={styles.optionContent}>
+          <Text style={styles.optionTitle}>{title}</Text>
+          <Text style={styles.optionDescription}>{description}</Text>
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -445,7 +394,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalTouchableOverlay: {
@@ -454,12 +403,18 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   menuContainer: {
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    borderRadius: 16,
+    backgroundColor: Colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 5,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderBottomWidth: 0,
   },
   blurContainer: {
     padding: 20,
@@ -477,18 +432,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   menuTitle: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: Colors.textDark,
   },
   closeButton: {
-    padding: 10,
+    padding: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   menuItemsContainer: {
     gap: 16,
@@ -528,6 +484,44 @@ const styles = StyleSheet.create({
   menuItemDescription: {
     fontSize: 14,
     color: 'rgba(255, 255, 255, 0.7)',
+  },
+  menuOptionsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 8,
+    padding: 16,
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textDark,
+    marginBottom: 4,
+  },
+  optionDescription: {
+    fontSize: 14,
+    color: Colors.textLight,
   },
 })
 

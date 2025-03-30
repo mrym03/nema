@@ -511,36 +511,7 @@ export default function PantryScreen() {
           styles.addButtonContainer, 
           { bottom: Math.max(insets.bottom, 0) + tabBarHeight }
         ]}>
-          {shouldUseGradient ? (
-            <LinearGradient
-              colors={[Colors.primary, Colors.primaryDark]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.addButtonBackground}
-            >
-              <Pressable
-                style={({ pressed }) => [
-                  styles.addButton,
-                  pressed && styles.addButtonPressed
-                ]}
-                onPress={handleAddItem}
-              >
-                <Plus size={28} color="#FFFFFF" strokeWidth={2.5} />
-              </Pressable>
-            </LinearGradient>
-          ) : (
-            <View style={[styles.addButtonBackground, { backgroundColor: Colors.primary }]}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.addButton,
-                  pressed && styles.addButtonPressed
-                ]}
-                onPress={handleAddItem}
-              >
-                <Plus size={28} color="#FFFFFF" strokeWidth={2.5} />
-              </Pressable>
-            </View>
-          )}
+          <AddItemButton onPress={handleAddItem} />
         </View>
       </View>
     </View>
