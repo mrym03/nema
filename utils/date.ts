@@ -37,6 +37,17 @@ export const getDaysUntilExpiry = (dateString: string): number => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
+export const getDaysFromToday = (date: Date): number => {
+  const now = new Date();
+  // Reset hours to make comparison based on days only
+  now.setHours(0, 0, 0, 0);
+  const targetDate = new Date(date);
+  targetDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = targetDate.getTime() - now.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
+
 export const isExpiringSoon = (dateString: string, days = 3): boolean => {
   const daysLeft = getDaysUntilExpiry(dateString);
   return daysLeft >= 0 && daysLeft <= days;
