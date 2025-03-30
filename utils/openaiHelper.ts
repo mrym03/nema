@@ -39,9 +39,19 @@ export function normalizeIngredientName(name: string): string {
   );
 }
 
-// Helper function to standardize units
-export function standardizeUnit(unit: string): string {
+// Helper function to standardize units for practical shopping
+export function standardizeUnit(unit: string, ingredientName?: string): string {
+  const normalizedUnit = unit.toLowerCase().trim();
+
+  // Convert cooking measurements to practical retail units
+  // First, map common cooking units to their standard forms
   const unitMap: Record<string, string> = {
+    // Volume cooking units
+    tablespoon: "tbsp",
+    tablespoons: "tbsp",
+    teaspoon: "tsp",
+    teaspoons: "tsp",
+
     // Weight
     pound: "lb",
     pounds: "lb",
@@ -55,11 +65,6 @@ export function standardizeUnit(unit: string): string {
 
     // Volume
     cup: "cups",
-    tablespoon: "tbsp",
-    tablespoons: "tbsp",
-    tsp: "tsp",
-    teaspoon: "tsp",
-    teaspoons: "tsp",
     "fluid ounce": "fl oz",
     "fluid ounces": "fl oz",
     milliliter: "ml",
@@ -83,8 +88,123 @@ export function standardizeUnit(unit: string): string {
     pkg: "packages",
   };
 
+  // First standardize the unit format
+  const standardizedUnit = unitMap[normalizedUnit] || normalizedUnit;
+
+  // Get the ingredient name for context-aware unit conversion
+  const ingredient = ingredientName ? ingredientName.toLowerCase() : "";
+
+  // Now convert cooking units to practical shopping units
+  if (standardizedUnit === "tbsp" || standardizedUnit === "tsp") {
+    // For oils, sauces, liquids - convert to fl oz
+    if (
+      ingredient.includes("oil") ||
+      ingredient.includes("sauce") ||
+      ingredient.includes("vinegar") ||
+      ingredient.includes("syrup") ||
+      ingredient.includes("extract")
+    ) {
+      return "fl oz";
+    }
+
+    // For spices, seasonings - convert to oz
+    if (
+      ingredient.includes("spice") ||
+      ingredient.includes("salt") ||
+      ingredient.includes("pepper") ||
+      ingredient.includes("cumin") ||
+      ingredient.includes("paprika") ||
+      ingredient.includes("chili") ||
+      ingredient.includes("flakes") ||
+      ingredient.includes("powder") ||
+      ingredient.includes("seasoning")
+    ) {
+      return "oz";
+    }
+
+    // For herbs, leave as is because they're often sold in bunches
+    if (
+      ingredient.includes("herb") ||
+      ingredient.includes("basil") ||
+      ingredient.includes("parsley") ||
+      ingredient.includes("cilantro") ||
+      ingredient.includes("thyme") ||
+      ingredient.includes("rosemary") ||
+      ingredient.includes("oregano")
+    ) {
+      return "bunch";
+    }
+  }
+
+  // Handle common conversions for specific ingredients
+  if (
+    standardizedUnit === "medium" ||
+    standardizedUnit === "large" ||
+    standardizedUnit === "small"
+  ) {
+    if (
+      ingredient.includes("onion") ||
+      ingredient.includes("apple") ||
+      ingredient.includes("potato") ||
+      ingredient.includes("tomato") ||
+      ingredient.includes("avocado") ||
+      ingredient.includes("lemon") ||
+      ingredient.includes("lime") ||
+      ingredient.includes("orange")
+    ) {
+      return "pcs";
+    }
+  }
+
+  return standardizedUnit;
+}
+
+// Add a new function to convert cooking measurements to practical shopping quantities
+export function convertToPracticalQuantity(
+  amount: number,
+  unit: string,
+  ingredientName: string
+): { amount: number; unit: string } {
   const normalizedUnit = unit.toLowerCase().trim();
-  return unitMap[normalizedUnit] || normalizedUnit;
+  const ingredient = ingredientName.toLowerCase();
+
+  // Tablespoon to fluid ounce conversion (1 tbsp = 0.5 fl oz)
+  if (
+    normalizedUnit === "tbsp" &&
+    (ingredient.includes("oil") ||
+      ingredient.includes("sauce") ||
+      ingredient.includes("vinegar"))
+  ) {
+    return {
+      amount: Math.max(1, Math.ceil(amount * 0.5)),
+      unit: "fl oz",
+    };
+  }
+
+  // Teaspoon to ounce conversion for spices (approximation for shopping)
+  if (
+    normalizedUnit === "tsp" &&
+    (ingredient.includes("spice") ||
+      ingredient.includes("salt") ||
+      ingredient.includes("pepper") ||
+      ingredient.includes("flake"))
+  ) {
+    // Approximate 1 tsp as 0.1 oz for shopping purposes
+    return {
+      amount: Math.max(1, Math.ceil(amount * 0.1)),
+      unit: "oz",
+    };
+  }
+
+  // If the amount is very small (less than 1), round up to 1 for practical shopping
+  if (amount < 1) {
+    return {
+      amount: 1,
+      unit: unit,
+    };
+  }
+
+  return { amount, unit };
 }
 
 // Function to get existing ingredient information from pantry and shopping list
@@ -346,10 +466,15 @@ ${existingIngredientsInfo}
 
 Guidelines:
 1. Use singular form for ingredient names (e.g., "banana" not "bananas") for consistency
-2. Use standardized units (e.g., "lb" not "pound" or "pounds")
+2. Use standardized units OPTIMIZED FOR SHOPPING, not just cooking:
+   - For produce: use "lb", "oz", or "pcs" (pieces) instead of "medium" or "large"
+   - For liquids: use "fl oz" or "cups" instead of "tbsp" or "tsp"
+   - For spices: use "oz" instead of "tsp" when possible
+   - For packaged goods: use "packages", "cans", or "jars"
 3. For ingredients already in the pantry/shopping list, match their exact name and unit
 4. Be consistent with units for the same ingredient (don't use "cups" and "oz" for the same ingredient)
-5. Assign each ingredient to one of these categories:
+5. Make sure the quantities make sense for SHOPPING purposes (not just recipe amounts)
+6. Assign each ingredient to one of these categories:
    - "Meat & Seafood" (beef, chicken, fish, etc.)
    - "Produce" (fruits, vegetables, herbs)
    - "Dairy & Eggs" (milk, cheese, yogurt, eggs)
@@ -360,10 +485,11 @@ Guidelines:
    - "Other" (anything that doesn't fit above)
 
 For example:
-- "2 large eggs" → name: "egg", amount: 2, unit: "large", category: "Dairy & Eggs"
-- "1/2 cup flour" → name: "flour", amount: 0.5, unit: "cups", category: "Pantry Staples"
-- "Salt to taste" → name: "salt", amount: 0.25, unit: "tsp", category: "Pantry Staples"
-- "banana" → name: "banana", amount: 2, unit: "medium", category: "Produce"
+- "2 large eggs" → name: "egg", amount: 12, unit: "pcs", category: "Dairy & Eggs" (eggs are sold by the dozen)
+- "1/2 cup flour" → name: "flour", amount: 8, unit: "oz", category: "Pantry Staples" (converted to ounces for shopping)
+- "Salt to taste" → name: "salt", amount: 1, unit: "oz", category: "Pantry Staples" (minimal practical amount)
+- "2 tbsp olive oil" → name: "olive oil", amount: 8, unit: "fl oz", category: "Pantry Staples" (smallest practical bottle)
+- "3 medium onions" → name: "onion", amount: 3, unit: "pcs", category: "Produce" (how they're sold)
 
 Return as JSON in this format:
 {
@@ -371,7 +497,7 @@ Return as JSON in this format:
     {
       "name": "ingredient name (singular form)",
       "amount": numeric_value,
-      "unit": "unit of measurement (standardized)",
+      "unit": "unit of measurement (standardized for shopping)",
       "category": "category from the list above"
     },
     ...
@@ -423,7 +549,10 @@ Return as JSON in this format:
       const newIngredients: RecipeIngredient[] = enhancedData.ingredients.map(
         (enhanced: EnhancedIngredient, index) => {
           // Standardize the unit for consistency
-          const standardizedUnit = standardizeUnit(enhanced.unit || "item");
+          const standardizedUnit = standardizeUnit(
+            enhanced.unit || "item",
+            enhanced.name
+          );
 
           // Map the category string to FoodCategory type
           const foodCategory = mapToFoodCategory(enhanced.category || "Other");

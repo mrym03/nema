@@ -46,6 +46,7 @@ import {
   enhanceRecipeIngredients,
   normalizeIngredientName,
   standardizeUnit,
+  convertToPracticalQuantity,
 } from "@/utils/openaiHelper";
 import { generateId } from "@/utils/helpers";
 
@@ -1157,6 +1158,18 @@ export default function MealPlanScreen() {
       );
       console.log(`Enhanced ${enhancedRecipes.length} recipes with OpenAI`);
 
+      // Debug: Count total ingredients before consolidation
+      let totalIngredientsBeforeConsolidation = 0;
+      enhancedRecipes.forEach((recipe) => {
+        if (recipe.extendedIngredients) {
+          totalIngredientsBeforeConsolidation +=
+            recipe.extendedIngredients.length;
+        }
+      });
+      console.log(
+        `Total ingredients before consolidation: ${totalIngredientsBeforeConsolidation}`
+      );
+
       // Collect all ingredients from all recipes
       const ingredientMap = new Map<
         string,
@@ -1165,8 +1178,14 @@ export default function MealPlanScreen() {
           amount: number;
           unit: string;
           recipeName: string;
+          originalUnit: string; // Store original unit for reference
+          originalAmount: number; // Store original amount for reference
+          recipes: Set<string>; // Track which recipes use this ingredient
         }
       >();
+
+      // Tracking duplicates for debugging
+      const duplicateTracking: Record<string, string[]> = {};
 
       enhancedRecipes.forEach((recipe) => {
         if (
@@ -1180,29 +1199,56 @@ export default function MealPlanScreen() {
             // Normalize ingredient name for comparison
             const normalizedName = normalizeIngredientName(ingredient.name);
 
-            // Standardize the unit
-            const standardUnit = standardizeUnit(ingredient.unit || "item");
+            // Convert to practical shopping units
+            const initialUnit = ingredient.unit || "item";
+            const standardUnit = standardizeUnit(initialUnit, ingredient.name);
+
+            // Convert amount based on unit conversion if needed
+            const amount = Number(ingredient.amount) || 1;
+            const { amount: practicalAmount, unit: practicalUnit } =
+              convertToPracticalQuantity(amount, standardUnit, ingredient.name);
 
             // Create a unique key that combines the normalized name and standard unit
-            const key = `${normalizedName}|${standardUnit}`;
+            const key = `${normalizedName}|${practicalUnit}`;
+
+            // Track duplicates for debugging
+            if (!duplicateTracking[normalizedName]) {
+              duplicateTracking[normalizedName] = [];
+            }
+            duplicateTracking[normalizedName].push(
+              `${
+                recipe.title || recipe.strMeal
+              }: ${amount} ${initialUnit} → ${practicalAmount} ${practicalUnit}`
+            );
 
             if (ingredientMap.has(key)) {
               // If ingredient already exists with the same unit, add the amounts
               const existing = ingredientMap.get(key)!;
-              existing.amount += Number(ingredient.amount) || 1;
+              const previousAmount = existing.amount;
+              existing.amount += practicalAmount;
+              existing.recipes.add(
+                recipe.strMeal || recipe.title || "Unknown Recipe"
+              );
+
+              console.log(
+                `Combining: ${
+                  ingredient.name
+                } (${practicalAmount} ${practicalUnit}) from ${
+                  recipe.title || recipe.strMeal
+                } with existing ${previousAmount} ${practicalUnit} → new total: ${
+                  existing.amount
+                } ${practicalUnit}`
+              );
             } else {
               // Check if the ingredient is already in the pantry with sufficient quantity
               const pantryItem = pantryItems.find(
                 (item) =>
                   normalizeIngredientName(item.name) === normalizedName &&
-                  (item.unit === standardUnit || !item.unit || !standardUnit)
+                  (item.unit === practicalUnit || !item.unit || !practicalUnit)
               );
 
               // Skip adding to shopping list if sufficient quantity in pantry
-              if (
-                pantryItem &&
-                pantryItem.quantity >= (Number(ingredient.amount) || 1)
-              ) {
+              if (pantryItem && pantryItem.quantity >= practicalAmount) {
                 console.log(
                   `Skipping ${ingredient.name} - found in pantry with sufficient quantity`
                 );
@@ -1211,21 +1257,31 @@ export default function MealPlanScreen() {
 
               // If the pantry has some but not enough, reduce the amount needed
               const amountNeeded = pantryItem
-                ? Math.max(
-                    0,
-                    (Number(ingredient.amount) || 1) - pantryItem.quantity
-                  )
-                : Number(ingredient.amount) || 1;
+                ? Math.max(0, practicalAmount - pantryItem.quantity)
+                : practicalAmount;
 
               // Only add to shopping list if we need more
               if (amountNeeded > 0) {
                 ingredientMap.set(key, {
                   name: ingredient.name,
                   amount: amountNeeded,
-                  unit: standardUnit,
+                  unit: practicalUnit,
+                  originalUnit: initialUnit,
+                  originalAmount: amount,
                   recipeName:
                     recipe.strMeal || recipe.title || "Unknown Recipe",
+                  recipes: new Set([
+                    recipe.strMeal || recipe.title || "Unknown Recipe",
+                  ]),
                 });
+
+                console.log(
+                  `Added: ${
+                    ingredient.name
+                  } (${amountNeeded} ${practicalUnit}) from ${
+                    recipe.title || recipe.strMeal
+                  }`
+                );
               }
             }
           });
@@ -1236,19 +1292,38 @@ export default function MealPlanScreen() {
         }
       });
 
+      // Debug: Log ingredient counts before and after consolidation
+      console.log(
+        `Total ingredients after consolidation: ${ingredientMap.size} (from ${totalIngredientsBeforeConsolidation} original ingredients)`
+      );
+
+      // Log duplicates (ingredients that appeared in multiple recipes)
+      console.log("Ingredients that appeared in multiple recipes:");
+      Object.entries(duplicateTracking).forEach(([name, occurrences]) => {
+        if (occurrences.length > 1) {
+          console.log(`- ${name} appeared ${occurrences.length} times:`);
+          occurrences.forEach((occurrence) => console.log(`  - ${occurrence}`));
+        }
+      });
+
       // Convert to shopping list items
       const shoppingItems: RecipeIngredient[] = Array.from(
         ingredientMap.values()
-      ).map((ingredient) => ({
-        id: generateId(),
-        name: ingredient.name,
-        quantity: ingredient.amount,
-        unit: ingredient.unit,
-        completed: false,
-        addedOn: new Date().toISOString(),
-        category: categorizeIngredient(ingredient.name),
-        recipeName: ingredient.recipeName,
-      }));
+      ).map((ingredient) => {
+        // Get the list of recipe names that use this ingredient
+        const recipeNames = Array.from(ingredient.recipes).join(", ");
+
+        return {
+          id: generateId(),
+          name: ingredient.name,
+          quantity: ingredient.amount,
+          unit: ingredient.unit,
+          completed: false,
+          addedOn: new Date().toISOString(),
+          category: categorizeIngredient(ingredient.name),
+          recipeName: recipeNames,
+        };
+      });
 
       console.log(`Generated ${shoppingItems.length} shopping list items`);
 
