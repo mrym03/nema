@@ -65,32 +65,31 @@ const CardContainer: React.FC<CardContainerProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.card,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0,
   },
   shadowLow: {
-    shadowColor: Colors.shadowLight,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
   },
   shadowMedium: {
-    shadowColor: Colors.shadowMedium,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: 3,
   },
   shadowHigh: {
-    shadowColor: Colors.shadowDark,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
   },
 });
 

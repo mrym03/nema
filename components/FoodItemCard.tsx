@@ -1,13 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { FoodItem } from '@/types';
 import Colors from '@/constants/colors';
-import { formatDate } from '@/utils/date';
+import { formatDate, getDaysFromToday } from '@/utils/date';
 import CardContainer from './CardContainer';
+import { Calendar, Droplets, ShoppingBag } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
+let Animated: any = { Value: class {}, timing: () => ({ start: () => {} }) };
+let Easing: any = {};
 
 // Try to import the libraries, but use fallbacks if they fail
 try {
@@ -20,6 +24,14 @@ try {
   } catch (e) {
     console.warn('Linear gradient not available, using fallback');
   }
+}
+
+try {
+  const ReactNative = require('react-native');
+  Animated = ReactNative.Animated;
+  Easing = ReactNative.Easing;
+} catch (e) {
+  console.warn('Animated API not available, using fallback');
 }
 
 // Food category default images
@@ -97,9 +109,30 @@ interface FoodItemCardProps {
 }
 
 const FoodItemCard: React.FC<FoodItemCardProps> = ({ foodItem, onPress }) => {
+  const [loaded, setLoaded] = useState(false);
+  const scaleAnim = React.useRef(new Animated.Value(0.96)).current;
+  const opacityAnim = React.useRef(new Animated.Value(0)).current;
+  
+  useEffect(() => {
+    // Animate in when component mounts
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.back(1.5))
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad)
+      })
+    ]).start();
+  }, []);
+  
   const category = foodItem.category || 'other';
   const categoryColor = Colors[category] || Colors.other;
-  const categoryTextColor = getCategoryTextColor(categoryColor);
   
   const isExpiringSoon = foodItem.expiryDate
     ? new Date(foodItem.expiryDate) < new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
@@ -108,23 +141,44 @@ const FoodItemCard: React.FC<FoodItemCardProps> = ({ foodItem, onPress }) => {
   const isExpired = foodItem.expiryDate
     ? new Date(foodItem.expiryDate) < new Date()
     : false;
-
+    
+  // Get days remaining until expiry
+  const daysRemaining = foodItem.expiryDate 
+    ? getDaysFromToday(new Date(foodItem.expiryDate))
+    : null;
+    
+  // Determine background color based on expiry status
+  const getStatusColor = () => {
+    if (isExpired) return Colors.danger;
+    if (isExpiringSoon) return Colors.warning;
+    return Colors.success;
+  };
+  
+  // Badge color based on expiry
+  const badgeColor = getStatusColor();
+  
   // Determine if we should use LinearGradient or fallback to a regular view
   const shouldUseGradient = LinearGradient !== View;
   
-  const GradientComponent = shouldUseGradient ? LinearGradient : View;
+  // Handle press animation
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.98,
+      duration: 100,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.quad)
+    }).start();
+  };
   
-  const categoryGradientProps = shouldUseGradient
-    ? {
-        colors: [categoryColor, categoryColor + '80'],
-        start: { x: 0, y: 0 },
-        end: { x: 1, y: 0 },
-        style: styles.categoryTag
-      }
-    : {
-        style: [styles.categoryTag, { backgroundColor: categoryColor }]
-      };
-      
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      friction: 5,
+      tension: 40
+    }).start();
+  };
+  
   // Function to get an appropriate image for the food item
   const getImageUrl = (): string => {
     // If the item already has an imageUrl, use it
@@ -150,14 +204,21 @@ const FoodItemCard: React.FC<FoodItemCardProps> = ({ foodItem, onPress }) => {
   };
 
   return (
-    <CardContainer animation="fadeIn" style={styles.container}>
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          opacity: opacityAnim,
+          transform: [{ scale: scaleAnim }]
+        }
+      ]}
+    >
       <Pressable
-        style={({ pressed }) => [
-          styles.pressable,
-          pressed && styles.pressed
-        ]}
+        style={styles.pressable}
         onPress={() => onPress(foodItem)}
-        android_ripple={{ color: Colors.shadowLight }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        android_ripple={{ color: 'rgba(0,0,0,0.1)' }}
       >
         <View style={styles.imageContainer}>
           <Image
@@ -165,172 +226,211 @@ const FoodItemCard: React.FC<FoodItemCardProps> = ({ foodItem, onPress }) => {
             style={styles.image}
             contentFit="cover"
             transition={300}
-            placeholder="blur"
+            placeholder={{ color: 'rgba(200, 200, 200, 0.5)' }}
+            onLoadEnd={() => setLoaded(true)}
+            cachePolicy="memory-disk"
           />
           
-          {/* Category tag */}
-          <GradientComponent {...categoryGradientProps}>
-            <Text style={[styles.categoryText, { color: categoryTextColor }]}>
-              {category.charAt(0).toUpperCase() + category.slice(1)}
-            </Text>
-          </GradientComponent>
-          
-          {/* Status tag - if opened */}
-          {foodItem.isOpen && (
-            <View style={styles.statusTag}>
-              <Text style={styles.statusText}>Opened</Text>
+          {foodItem.expiryDate && (
+            <View style={[
+              styles.expiryBadge,
+              { backgroundColor: badgeColor + 'E6' } // Add opacity
+            ]}>
+              {daysRemaining !== null && (
+                <>
+                  <Calendar 
+                    size={12} 
+                    color="#FFF" 
+                    style={styles.badgeIcon} 
+                  />
+                  <Text style={styles.badgeText}>
+                    {isExpired 
+                      ? 'Expired' 
+                      : daysRemaining === 0 
+                        ? 'Today'
+                        : daysRemaining === 1 
+                          ? '1 day'
+                          : `${daysRemaining} days`
+                    }
+                  </Text>
+                </>
+              )}
             </View>
           )}
         </View>
         
         <View style={styles.content}>
-          <Text style={styles.name} numberOfLines={1}>{foodItem.name}</Text>
+          <View style={styles.headerRow}>
+            <Text style={styles.name} numberOfLines={1}>{foodItem.name}</Text>
+            <View style={[styles.categoryDot, { backgroundColor: categoryColor }]} />
+          </View>
           
-          <Text style={styles.quantity} numberOfLines={1}>
-            {foodItem.quantity || 1} {foodItem.unit || 'item'}
-            {(foodItem.quantity || 1) > 1 && foodItem.unit !== 'kg' && foodItem.unit !== 'g' && 's'}
-          </Text>
+          <View style={styles.infoRow}>
+            <View style={styles.infoItem}>
+              <ShoppingBag size={14} color="#9A9A9A" style={styles.infoIcon} />
+              <Text style={styles.infoText}>
+                {foodItem.quantity || 1} {foodItem.unit || 'item'}
+                {(foodItem.quantity || 1) > 1 && foodItem.unit !== 'kg' && foodItem.unit !== 'g' && 's'}
+              </Text>
+            </View>
+            
+            {foodItem.isOpen && (
+              <View style={styles.openedBadge}>
+                <Droplets size={12} color="#FFF" />
+                <Text style={styles.openedText}>Opened</Text>
+              </View>
+            )}
+          </View>
           
           {foodItem.expiryDate && (
             <View style={styles.expiryContainer}>
-              <Text style={[
-                styles.expiryLabel,
-                isExpired && styles.expiredLabel,
-                isExpiringSoon && !isExpired && styles.expiringLabel
-              ]}>
-                {isExpired ? 'Expired:' : 'Expires:'}
-              </Text>
               <Text style={[
                 styles.expiryDate,
                 isExpired && styles.expiredDate,
                 isExpiringSoon && !isExpired && styles.expiringDate
               ]}>
+                {isExpired ? 'Expired on ' : 'Expires '} 
                 {formatDate(foodItem.expiryDate)}
               </Text>
             </View>
           )}
         </View>
+        
+        {shouldUseGradient && (
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.02)']}
+            style={StyleSheet.absoluteFillObject}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+        )}
       </Pressable>
-    </CardContainer>
+    </Animated.View>
   );
 };
-
-function getCategoryTextColor(backgroundColor: string): string {
-  // Simple calculation to determine if text should be white or black
-  // This is a simplification and could be improved for better contrast
-  const r = parseInt(backgroundColor.substring(1, 3), 16);
-  const g = parseInt(backgroundColor.substring(3, 5), 16);
-  const b = parseInt(backgroundColor.substring(5, 7), 16);
-  
-  // Calculate brightness (on a scale of 0-255)
-  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-  
-  // Return white text for dark backgrounds, black for light backgrounds
-  return brightness > 128 ? '#000000' : '#FFFFFF';
-}
 
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   pressable: {
     flexDirection: 'row',
     overflow: 'hidden',
-  },
-  pressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.995 }],
+    borderRadius: 16,
+    height: 110,
   },
   imageContainer: {
     position: 'relative',
-    width: 90,
-    height: 110,
+    width: 110,
+    height: '100%',
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#f0f0f0',
   },
-  placeholderImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeholderText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  categoryTag: {
+  expiryBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+    top: 12,
+    left: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
   },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: 'bold',
+  badgeIcon: {
+    marginRight: 4,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
   content: {
     flex: 1,
-    padding: 12,
-    justifyContent: 'center',
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   name: {
     fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textDark,
-    marginBottom: 4,
+    fontWeight: '700',
+    color: Colors.text,
+    flex: 1,
+    marginRight: 8,
   },
-  quantity: {
-    fontSize: 14,
-    color: Colors.textLight,
-    marginBottom: 6,
+  categoryDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
-  expiryContainer: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  expiryLabel: {
-    fontSize: 12,
+  infoIcon: {
+    marginRight: 6,
+  },
+  infoText: {
+    fontSize: 14,
     color: Colors.textLight,
-    marginRight: 4,
+  },
+  openedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(79, 209, 197, 0.9)',
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+  },
+  openedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  expiryContainer: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
   },
   expiryDate: {
     fontSize: 12,
     color: Colors.textLight,
-  },
-  expiredLabel: {
-    color: Colors.danger,
-    fontWeight: '500',
-  },
-  expiringLabel: {
-    color: Colors.warning,
     fontWeight: '500',
   },
   expiredDate: {
     color: Colors.danger,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   expiringDate: {
     color: Colors.warning,
-    fontWeight: '500',
-  },
-  statusTag: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: Colors.success,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: Colors.textDark,
+    fontWeight: '600',
   },
 });
 
