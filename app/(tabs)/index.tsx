@@ -369,10 +369,10 @@ export default function PantryScreen() {
                     colors={[Colors.primary, Colors.primaryDark]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ height: 50 }}
+                    style={[styles.titleGradient, { width: width * 0.6 }]}
                   />
                 ) : (
-                  <View style={{ height: 50, backgroundColor: Colors.primary }} />
+                  <View style={[styles.titleGradient, { backgroundColor: Colors.primary, width: width * 0.6 }]} />
                 )}
               </MaskedView>
               <Text style={styles.subtitle}>
@@ -585,6 +585,9 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: '800',
     color: '#000000',
+  },
+  titleGradient: {
+    height: 50,
   },
   subtitle: {
     fontSize: 16,
