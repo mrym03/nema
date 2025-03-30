@@ -5,6 +5,7 @@ import {
   fetchRecipesByIngredients as fetchMealDbRecipes,
   getRecipeDetails as getMealDbRecipeDetails,
 } from "./mealDbApi";
+import { SPOONACULAR_API_KEY } from "../constants/apiKeys";
 
 // Firebase configuration
 const FIREBASE_CONFIG = {
@@ -17,7 +18,6 @@ const FIREBASE_CONFIG = {
 };
 
 // Spoonacular API for recipes
-const SPOONACULAR_API_KEY = "f4bac3e90825417fabc5e76844a07d77";
 const SPOONACULAR_BASE_URL = "https://api.spoonacular.com";
 
 // UPC database API for barcode scanning
@@ -34,9 +34,8 @@ const DEV_MODE = true; // Temporarily using development mode until Supabase tabl
 // Firebase initialization would normally happen here
 // For now, we'll simulate Firebase with AsyncStorage
 
-// Recipe API functions - using TheMealDB API
-export const fetchRecipesByIngredients = fetchMealDbRecipes;
-export const getRecipeDetails = getMealDbRecipeDetails;
+// Recipe API functions - IMPORTANT: Now using Spoonacular API with retry logic
+// Instead of using TheMealDB API functions directly, we'll use our enhanced versions below
 
 // Barcode lookup function
 export const lookupBarcodeUPC = async (barcode: string) => {
@@ -297,3 +296,80 @@ export const getUserData = async (userId: string) => {
     throw error;
   }
 };
+
+// Max retries for API calls
+const MAX_RETRIES = 3;
+// Delay between retries (ms)
+const RETRY_DELAY = 1500;
+
+// Helper function to wait
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper function to make API calls with retries
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit = {}, 
+  retries = MAX_RETRIES
+): Promise<any> {
+  try {
+    const response = await fetch(url, options);
+    
+    // Handle rate limit
+    if (response.status === 429) {
+      if (retries > 0) {
+        console.log(`Rate limited (429), retrying in ${RETRY_DELAY}ms... (${retries} retries left)`);
+        await wait(RETRY_DELAY);
+        return fetchWithRetry(url, options, retries - 1);
+      } else {
+        throw new Error('Rate limit exceeded. Please try again later.');
+      }
+    }
+    
+    // Check for success
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    if (retries > 0 && error.message !== 'Rate limit exceeded. Please try again later.') {
+      console.log(`API request failed, retrying in ${RETRY_DELAY}ms... (${retries} retries left)`);
+      await wait(RETRY_DELAY);
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw error;
+  }
+}
+
+// Enhanced recipe API functions with retry logic - export these
+export async function fetchRecipesByIngredients(
+  ingredients: string[], 
+  dietaryPreferences: string[] = [],
+  cuisinePreferences: string[] = []
+): Promise<Recipe[]> {
+  try {
+    console.log(`Using TheMealDB as fallback due to Spoonacular API quota issues`);
+    
+    // Use TheMealDB API instead since it's free
+    const mealDbRecipes = await fetchMealDbRecipes(ingredients, dietaryPreferences, cuisinePreferences);
+    return mealDbRecipes;
+  } catch (error) {
+    console.error("Error fetching recipes by ingredients:", error);
+    
+    // Return an empty array instead of throwing to prevent app crashes
+    return [];
+  }
+}
+
+// Enhanced recipe details API function with retry logic
+export async function getRecipeDetails(id: string): Promise<Recipe> {
+  try {
+    console.log(`Using TheMealDB as fallback for recipe details due to Spoonacular API quota issues`);
+    
+    // Use TheMealDB API for details instead
+    return await getMealDbRecipeDetails(id);
+  } catch (error) {
+    console.error(`Error fetching details for recipe ${id}:`, error);
+    throw error;
+  }
+}

@@ -90,9 +90,9 @@ export default function RecipesScreen() {
     // TheMealDB doesn't have dedicated API filters, but we'll use these for manual filtering
     const dietaryPrefs = preferences.dietaryPreferences.map((pref) => {
       // Map app preference keys to simpler filter terms
-      if (pref === "glutenFree") return "gluten free";
-      if (pref === "dairyFree") return "dairy free";
-      if (pref === "lowCarb") return "low carb";
+      if (pref === "glutenFree" as any) return "gluten free";
+      if (pref === "dairyFree" as any) return "dairy free";
+      if (pref === "lowCarb" as any) return "low carb";
       if (pref === "vegetarian") return "vegetarian";
       if (pref === "vegan") return "vegan";
       return pref;
@@ -182,20 +182,10 @@ export default function RecipesScreen() {
       };
 
   const renderEmptyState = () => {
-    if (isLoading && !refreshing) {
-      return (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>
-            Finding recipes based on your pantry...
-          </Text>
-        </View>
-      );
-    }
-
     if (error) {
       return (
         <View style={styles.centered}>
+          <AlertTriangle size={50} color={Colors.danger} style={{ marginBottom: 16 }} />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable
             style={styles.retryButton}
@@ -258,38 +248,45 @@ export default function RecipesScreen() {
         </View>
       </HeaderComponent>
 
-      <View style={styles.contentContainer}>
-        {selectedRecipes.length > 0 && (
-          <TouchableOpacity
-            style={styles.shoppingListButton}
-            onPress={handleViewMealPlanner}
-          >
-            <Calendar size={20} color="#FFFFFF" />
-            <Text style={styles.shoppingListButtonText}>
-              View Meal Plan ({selectedRecipes.length})
-            </Text>
-          </TouchableOpacity>
+      <View
+        style={[
+          styles.listContainer,
+          { paddingBottom: bottomPadding },
+        ]}
+      >
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <AnimatableView 
+              animation="fadeIn" 
+              duration={800} 
+              style={styles.loadingTextContainer}
+            >
+              <Text style={styles.loadingTitle}>Finding Recipes For You</Text>
+              <Text style={styles.loadingText}>
+                Searching based on your pantry items...
+              </Text>
+            </AnimatableView>
+          </View>
+        ) : recipes.length === 0 ? (
+          renderEmptyState()
+        ) : (
+          <FlatList
+            data={recipes}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[Colors.primary]}
+                tintColor={Colors.primary}
+              />
+            }
+          />
         )}
-
-        <FlatList
-          data={recipes}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: bottomPadding },
-          ]}
-          ListEmptyComponent={renderEmptyState}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[Colors.primary]}
-              tintColor={Colors.primary}
-            />
-          }
-        />
       </View>
     </View>
   );
@@ -304,96 +301,80 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 16,
-    paddingBottom: 16,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    shadowColor: Colors.shadowDark || "rgba(0,0,0,0.2)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 10,
+    paddingBottom: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#FFFFFF",
+    color: "#fff",
   },
   headerButtons: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
   },
   iconButton: {
+    marginLeft: 16,
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   pressed: {
     opacity: 0.7,
-    transform: [{ scale: 0.97 }],
   },
-  listContent: {
+  listContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  list: {
     padding: 16,
   },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: Colors.textLight,
-    textAlign: "center",
+    padding: 16,
   },
   errorText: {
     fontSize: 16,
+    textAlign: "center",
+    marginVertical: 8,
     color: Colors.danger,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  quotaTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.warning,
-    marginTop: 10,
-    marginBottom: 8,
-    textAlign: "center",
   },
   retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    marginTop: 12,
     backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "500",
+    color: "#fff",
+    fontWeight: "600",
   },
-  shoppingListButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Colors.success,
-    padding: 12,
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 8,
-    shadowColor: Colors.shadowDark || "rgba(0,0,0,0.2)",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
-  shoppingListButtonText: {
-    color: "#FFFFFF",
+  loadingTextContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  loadingTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: Colors.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  loadingText: {
     fontSize: 16,
-    fontWeight: "bold",
-    marginLeft: 8,
+    color: Colors.textLight,
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

@@ -42,6 +42,12 @@ export interface Recipe {
   likes: number;
   instructions?: string;
   extendedIngredients?: RecipeIngredient[];
+  // Dietary information
+  vegan?: boolean;
+  vegetarian?: boolean;
+  glutenFree?: boolean;
+  dairyFree?: boolean;
+  diets?: string[];
 }
 
 export interface RecipeIngredient {
