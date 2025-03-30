@@ -9,6 +9,8 @@ import {
   Alert,
   FlatList,
   Switch,
+  Platform,
+  StatusBar,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -19,6 +21,7 @@ import { FoodCategory } from "@/types";
 import { identifyMultipleFoodItemsWithOpenAI } from "@/utils/openaiVision";
 import { USE_MOCK_OCR } from "@/utils/env";
 import { usePantryStore } from "@/store/pantryStore";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 // Food category default images
 const categoryImages = {
@@ -148,6 +151,7 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
   const [detectedItems, setDetectedItems] = useState<FoodItemDetection[]>([]);
   const router = useRouter();
   const { addItem } = usePantryStore();
+  const insets = useSafeAreaInsets();
 
   // Function to get an appropriate image for the food item
   const getImageUrl = (item: {
@@ -368,11 +372,22 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Multi-Item Scanner</Text>
-      <Text style={styles.subtitle}>
-        Take a photo containing multiple food items
-      </Text>
+    <View
+      style={[
+        styles.container,
+        {
+          paddingTop: insets.top,
+          paddingBottom: Math.max(16, insets.bottom),
+        },
+      ]}
+    >
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        <Text style={styles.title}>Multi-Item Scanner</Text>
+        <Text style={styles.subtitle}>
+          Take a photo containing multiple food items
+        </Text>
+      </View>
 
       {!image ? (
         <TouchableOpacity style={styles.button} onPress={pickImage}>
@@ -485,25 +500,22 @@ export default function MultiItemScanner({ onClose }: MultiItemScannerProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: Colors.background,
+    padding: 16,
   },
-  contentContainer: {
-    flex: 1,
-    alignItems: "center",
+  header: {
+    marginBottom: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: "bold",
+    color: Colors.textDark,
     marginBottom: 8,
-    color: Colors.text,
-    textAlign: "center",
   },
   subtitle: {
     fontSize: 16,
     color: Colors.textLight,
-    marginBottom: 20,
-    textAlign: "center",
+    marginBottom: 16,
   },
   button: {
     backgroundColor: Colors.primary,
@@ -535,6 +547,11 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 14,
     fontWeight: "600",
+  },
+  contentContainer: {
+    flex: 1,
+    alignItems: "center",
+    width: "100%",
   },
   imageContainer: {
     width: "100%",
@@ -631,9 +648,11 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.danger,
     borderRadius: 8,
     alignSelf: "center",
+    marginBottom: 20,
   },
   closeButtonText: {
     color: "#fff",
     fontWeight: "bold",
+    fontSize: 16,
   },
 });

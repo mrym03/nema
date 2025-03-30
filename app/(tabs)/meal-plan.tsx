@@ -49,6 +49,9 @@ import {
   convertToPracticalQuantity,
 } from "@/utils/openaiHelper";
 import { generateId } from "@/utils/helpers";
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import HeaderBar from '@/components/HeaderBar';
 
 // Define the FoodCategory type
 type FoodCategory =
@@ -1414,48 +1417,36 @@ export default function MealPlanScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: Colors.primary }]}>
-      <HeaderComponent {...headerProps}>
-        <Text style={styles.title}>Meal Plan</Text>
-        <View style={styles.headerButtons}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={handleGenerateMealPlan}
-            disabled={isLoading || selectedRecipes.length === 0}
-            onLongPress={() => {
-              Alert.alert(
-                "Refresh Suggestions",
-                "This refreshes the suggested recipes based on your pantry items and preferences. It does not automatically arrange them into a meal plan."
-              );
-            }}
-          >
-            <RefreshCw size={20} color="#FFFFFF" />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() => setShowHelpModal(true)}
-          >
-            <Info size={20} color="#FFFFFF" />
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.iconButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={navToRecipes}
-          >
-            <Search size={20} color="#FFFFFF" />
-          </Pressable>
-        </View>
-      </HeaderComponent>
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+      
+      <HeaderBar 
+        title="Meal Plan"
+        subtitle="Recipes to reduce waste"
+        rightButtons={
+          <>
+            <Pressable
+              style={styles.iconButton}
+              onPress={handleGenerateMealPlan}
+              disabled={isLoading || selectedRecipes.length === 0}
+            >
+              <Ionicons name="refresh-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => setShowHelpModal(true)}
+            >
+              <Ionicons name="information-circle-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+            <Pressable
+              style={styles.iconButton}
+              onPress={navToRecipes}
+            >
+              <Ionicons name="search-outline" size={24} color={Colors.textDark} />
+            </Pressable>
+          </>
+        }
+      />
 
       <View style={styles.contentContainer}>
         {selectedRecipes.length > 0 ? (
@@ -1657,6 +1648,7 @@ export default function MealPlanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
   },
   contentContainer: {
     flex: 1,
