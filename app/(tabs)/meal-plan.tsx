@@ -605,11 +605,9 @@ export default function MealPlanScreen() {
         );
 
       // Show success message with Alert
-      Alert.alert(
-        "Meal Plan Created",
-        "Your meal plan has been optimized using our rule-based algorithm to reduce food waste. It ensures no recipes are repeated within the same day.",
-        [{ text: "Great!" }]
-      );
+      Alert.alert("Meal Plan Created", "Your plan is ready to use.", [
+        { text: "OK" },
+      ]);
     } catch (error) {
       console.error("Error generating optimized meal plan:", error);
       Alert.alert(
@@ -702,194 +700,33 @@ export default function MealPlanScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Meal Planning Features</Text>
+            <Text style={styles.modalTitle}>Meal Planning</Text>
 
             <ScrollView
               style={styles.modalScrollContent}
               contentContainerStyle={styles.modalContentContainer}
             >
               <View style={styles.modalSection}>
-                <Text style={[styles.modalSubtitle, { color: Colors.primary }]}>
-                  Our Goal: Minimize Food Waste
-                </Text>
+                <Text style={styles.modalSubtitle}>Plan & Shop</Text>
                 <Text style={styles.modalText}>
-                  The meal planner uses special algorithms to create meal plans
-                  that help reduce food waste by prioritizing ingredients that
-                  will expire soon.
+                  The meal planner helps you create optimal weekly meal plans
+                  and generate efficient shopping lists.
                 </Text>
               </View>
 
               <View style={styles.modalSection}>
-                <Text style={[styles.modalSubtitle, { color: Colors.success }]}>
-                  NEW: AI Smart Meal Planning with Similar Recipe Suggestions
-                </Text>
+                <Text style={styles.modalSubtitle}>AI Smart Plan</Text>
                 <Text style={styles.modalText}>
-                  Our enhanced AI-powered meal planning system now goes beyond
-                  your selected recipes to find similar, complementary dishes
-                  that can help reduce food waste and add variety:
-                </Text>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Preserves your existing meal selections
-                  </Text>
-                </View>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Intelligently finds similar recipes based on your
-                    preferences
-                  </Text>
-                </View>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Prioritizes recipes that use ingredients about to expire
-                  </Text>
-                </View>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Ensures no recipe repetition on the same day
-                  </Text>
-                </View>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Uses AI to discover complementary recipes that work well
-                    together
-                  </Text>
-                </View>
-                <View style={styles.bulletPoint}>
-                  <View style={styles.bullet} />
-                  <Text style={styles.modalText}>
-                    Provides AI insights about why recipes were selected
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={[styles.modalSubtitle, { color: Colors.primary }]}>
-                  Regular Optimization
-                </Text>
-                <Text style={styles.modalText}>
-                  The basic optimization uses our scoring formula to assign
-                  recipes to each day, but only considers your selected recipes:
-                </Text>
-                <Text style={styles.formulaText}>
-                  Base Score = Sum(10 / days_left) for each pantry item
-                </Text>
-                <Text style={styles.modalText}>
-                  Recipes using ingredients that will expire sooner get higher
-                  scores. For example, an ingredient expiring in 2 days adds 5
-                  points, while one expiring in 10 days adds only 1 point.
+                  Uses AI to suggest meals that use your pantry ingredients
+                  efficiently and reduce food waste.
                 </Text>
               </View>
 
               <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>
-                  How to Identify AI Suggested Recipes:
-                </Text>
+                <Text style={styles.modalSubtitle}>Shopping List</Text>
                 <Text style={styles.modalText}>
-                  Recipes that were automatically suggested by the AI (not part
-                  of your original selection) are marked with a small green "AI"
-                  badge in the bottom left corner.
-                </Text>
-                <View style={styles.badgeExample}>
-                  <View style={styles.aiSuggestedBadge}>
-                    <Text style={styles.aiSuggestedText}>AI</Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.modalText,
-                      { marginLeft: 8, marginBottom: 0 },
-                    ]}
-                  >
-                    This label indicates a recipe suggested by AI
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>
-                  Difference Between Options:
-                </Text>
-                <View style={styles.comparisonTable}>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonHeader}>Feature</Text>
-                    <Text style={styles.comparisonHeader}>Optimize</Text>
-                    <Text style={styles.comparisonHeader}>AI Smart Plan</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Preserves selections
-                    </Text>
-                    <Text style={styles.comparisonCell}>No</Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Uses expiry dates
-                    </Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                    <Text style={styles.comparisonCell}>Yes+</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Avoids same-day repetition
-                    </Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Suggests similar recipes
-                    </Text>
-                    <Text style={styles.comparisonCell}>No</Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Recipe suggestions
-                    </Text>
-                    <Text style={styles.comparisonCell}>Selected only</Text>
-                    <Text style={styles.comparisonCell}>AI enhanced</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>Uses OpenAI</Text>
-                    <Text style={styles.comparisonCell}>No</Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                  </View>
-                  <View style={styles.comparisonRow}>
-                    <Text style={styles.comparisonFeature}>
-                      Provides insights
-                    </Text>
-                    <Text style={styles.comparisonCell}>No</Text>
-                    <Text style={styles.comparisonCell}>Yes</Text>
-                  </View>
-                </View>
-
-                <Text
-                  style={[
-                    styles.modalText,
-                    { marginTop: 10, fontStyle: "italic" },
-                  ]}
-                >
-                  Both options now avoid recipe repetition within the same day!
-                  The AI Smart Plan also adds similar recipe suggestions based
-                  on your preferences and pantry ingredients to maximize variety
-                  and minimize waste.
-                </Text>
-              </View>
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSubtitle}>Meals Per Day:</Text>
-                <Text style={styles.modalText}>
-                  The meal planner respects your preference for how many meals
-                  you want per day. This is configured in your Settings tab.
-                  Currently, you have {preferences.mealsPerDay || 3}{" "}
-                  {preferences.mealsPerDay === 1 ? "meal" : "meals"} per day
-                  configured.
+                  Creates an optimized shopping list based on your meal plan
+                  with smart consolidation of ingredients.
                 </Text>
               </View>
             </ScrollView>
@@ -1382,8 +1219,8 @@ Focus on creating the MINIMUM possible number of shopping items a home cook woul
 
       // Show a single improved notification with better UI styling
       Alert.alert(
-        "Smart Shopping List Generated",
-        `Your shopping list has been optimized from ${initialShoppingItems.length} to ${optimizedShoppingItems.length} items.\n\nOptimizations applied:\n• Removed common pantry staples\n• Consolidated similar ingredients\n• Used versatile alternatives\n• Excluded items easily made at home`,
+        "Shopping List Ready",
+        `Your optimized list has been created with ${optimizedShoppingItems.length} items.`,
         [
           {
             text: "View List",
