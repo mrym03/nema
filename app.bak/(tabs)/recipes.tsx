@@ -90,9 +90,9 @@ export default function RecipesScreen() {
     // TheMealDB doesn't have dedicated API filters, but we'll use these for manual filtering
     const dietaryPrefs = preferences.dietaryPreferences.map((pref) => {
       // Map app preference keys to simpler filter terms
-      if (pref === "glutenFree" as any) return "gluten free";
-      if (pref === "dairyFree" as any) return "dairy free";
-      if (pref === "lowCarb" as any) return "low carb";
+      if (pref === ("glutenFree" as any)) return "gluten free";
+      if (pref === ("dairyFree" as any)) return "dairy free";
+      if (pref === ("lowCarb" as any)) return "low carb";
       if (pref === "vegetarian") return "vegetarian";
       if (pref === "vegan") return "vegan";
       return pref;
@@ -185,7 +185,11 @@ export default function RecipesScreen() {
     if (error) {
       return (
         <View style={styles.centered}>
-          <AlertTriangle size={50} color={Colors.danger} style={{ marginBottom: 16 }} />
+          <AlertTriangle
+            size={50}
+            color={Colors.danger}
+            style={{ marginBottom: 16 }}
+          />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable
             style={styles.retryButton}
@@ -248,23 +252,18 @@ export default function RecipesScreen() {
         </View>
       </HeaderComponent>
 
-      <View
-        style={[
-          styles.listContainer,
-          { paddingBottom: bottomPadding },
-        ]}
-      >
+      <View style={[styles.listContainer, { paddingBottom: bottomPadding }]}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <AnimatableView 
-              animation="fadeIn" 
-              duration={800} 
+            <AnimatableView
+              animation="fadeIn"
+              duration={800}
               style={styles.loadingTextContainer}
             >
               <Text style={styles.loadingTitle}>Finding Recipes For You</Text>
               <Text style={styles.loadingText}>
-                Searching based on your pantry items...
+                Searching based on your preferred options...
               </Text>
             </AnimatableView>
           </View>
@@ -370,25 +369,25 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 20,
   },
   loadingTextContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 20,
   },
   loadingTitle: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.primary,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   loadingText: {
     fontSize: 16,
     color: Colors.textLight,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 4,
   },
   mealPlanButton: {

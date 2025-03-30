@@ -32,10 +32,10 @@ import {
   List,
   Calendar,
 } from "lucide-react-native";
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
-import HeaderBar from '@/components/HeaderBar';
+import { StatusBar } from "expo-status-bar";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useIsFocused } from "@react-navigation/native";
+import HeaderBar from "@/components/HeaderBar";
 
 // Conditional imports to handle potential errors
 let LinearGradient: any = View;
@@ -105,9 +105,9 @@ export default function RecipesScreen() {
     // TheMealDB doesn't have dedicated API filters, but we'll use these for manual filtering
     const dietaryPrefs = preferences.dietaryPreferences.map((pref) => {
       // Map app preference keys to simpler filter terms
-      if (pref === "glutenFree" as any) return "gluten free";
-      if (pref === "dairyFree" as any) return "dairy free";
-      if (pref === "lowCarb" as any) return "low carb";
+      if (pref === ("glutenFree" as any)) return "gluten free";
+      if (pref === ("dairyFree" as any)) return "dairy free";
+      if (pref === ("lowCarb" as any)) return "low carb";
       if (pref === "vegetarian") return "vegetarian";
       if (pref === "vegan") return "vegan";
       return pref;
@@ -200,7 +200,11 @@ export default function RecipesScreen() {
     if (error) {
       return (
         <View style={styles.centered}>
-          <AlertTriangle size={50} color={Colors.danger} style={{ marginBottom: 16 }} />
+          <AlertTriangle
+            size={50}
+            color={Colors.danger}
+            style={{ marginBottom: 16 }}
+          />
           <Text style={styles.errorText}>{error}</Text>
           <Pressable
             style={styles.retryButton}
@@ -248,11 +252,12 @@ export default function RecipesScreen() {
     if (!searchTerm.trim()) {
       return recipes;
     }
-    
+
     const term = searchTerm.toLowerCase().trim();
-    return recipes.filter(recipe => 
-      recipe.title.toLowerCase().includes(term) || 
-      recipe.summary?.toLowerCase().includes(term)
+    return recipes.filter(
+      (recipe) =>
+        recipe.title.toLowerCase().includes(term) ||
+        recipe.summary?.toLowerCase().includes(term)
     );
   }, [recipes, searchTerm]);
 
@@ -282,9 +287,14 @@ export default function RecipesScreen() {
                 <Ionicons name="close" size={24} color={Colors.textDark} />
               </Pressable>
             </View>
-            
+
             <View style={styles.searchInputContainer}>
-              <Ionicons name="search-outline" size={20} color={Colors.textLight} style={styles.searchIcon} />
+              <Ionicons
+                name="search-outline"
+                size={20}
+                color={Colors.textLight}
+                style={styles.searchIcon}
+              />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Type recipe name..."
@@ -294,16 +304,24 @@ export default function RecipesScreen() {
                 clearButtonMode="always"
               />
               {searchTerm.length > 0 && (
-                <Pressable onPress={() => setSearchTerm("")} style={styles.clearButton}>
-                  <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+                <Pressable
+                  onPress={() => setSearchTerm("")}
+                  style={styles.clearButton}
+                >
+                  <Ionicons
+                    name="close-circle"
+                    size={18}
+                    color={Colors.textLight}
+                  />
                 </Pressable>
               )}
             </View>
-            
+
             <Text style={styles.resultCount}>
-              {filteredRecipes().length} {filteredRecipes().length === 1 ? 'recipe' : 'recipes'} found
+              {filteredRecipes().length}{" "}
+              {filteredRecipes().length === 1 ? "recipe" : "recipes"} found
             </Text>
-            
+
             <FlatList
               data={filteredRecipes()}
               renderItem={renderItem}
@@ -312,8 +330,10 @@ export default function RecipesScreen() {
               contentContainerStyle={styles.searchList}
               ListEmptyComponent={
                 <View style={styles.noResults}>
-                  <Text style={styles.noResultsText}>No recipes found for "{searchTerm}"</Text>
-                  <TouchableOpacity 
+                  <Text style={styles.noResultsText}>
+                    No recipes found for "{searchTerm}"
+                  </Text>
+                  <TouchableOpacity
                     style={styles.resetButton}
                     onPress={() => setSearchTerm("")}
                   >
@@ -331,45 +351,48 @@ export default function RecipesScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
-      <HeaderBar 
+
+      <HeaderBar
         title="Recipes"
-        subtitle="Based on your pantry"
+        subtitle="Based on your preferences"
         rightButtons={
           <>
             <Pressable
               style={styles.iconButton}
               onPress={fetchRecipesFromPantry}
             >
-              <Ionicons name="refresh-outline" size={24} color={Colors.textDark} />
+              <Ionicons
+                name="refresh-outline"
+                size={24}
+                color={Colors.textDark}
+              />
             </Pressable>
-            <Pressable 
+            <Pressable
               style={styles.iconButton}
               onPress={() => setShowSearchModal(true)}
             >
-              <Ionicons name="search-outline" size={24} color={Colors.textDark} />
+              <Ionicons
+                name="search-outline"
+                size={24}
+                color={Colors.textDark}
+              />
             </Pressable>
           </>
         }
       />
 
-      <View
-        style={[
-          styles.listContainer,
-          { paddingBottom: bottomPadding },
-        ]}
-      >
+      <View style={[styles.listContainer, { paddingBottom: bottomPadding }]}>
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
-            <AnimatableView 
-              animation="fadeIn" 
-              duration={800} 
+            <AnimatableView
+              animation="fadeIn"
+              duration={800}
               style={styles.loadingTextContainer}
             >
               <Text style={styles.loadingTitle}>Finding Recipes For You</Text>
               <Text style={styles.loadingText}>
-                Searching based on your pantry items...
+                Searching based on your preferred options...
               </Text>
             </AnimatableView>
           </View>
@@ -414,7 +437,7 @@ export default function RecipesScreen() {
           {/* Filter options would go here */}
         </View>
       )}
-      
+
       {renderSearchModal()}
     </View>
   );
@@ -484,25 +507,25 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 20,
   },
   loadingTextContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 20,
   },
   loadingTitle: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: "600",
     color: Colors.primary,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   loadingText: {
     fontSize: 16,
     color: Colors.textLight,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 4,
   },
   mealPlanButton: {
@@ -539,17 +562,17 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: "rgba(0,0,0,0.5)",
   },
   searchModalContainer: {
     flex: 1,
     backgroundColor: Colors.background,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === "ios" ? 50 : 30,
   },
   searchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -557,20 +580,20 @@ const styles = StyleSheet.create({
   },
   searchModalTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: Colors.textDark,
   },
   closeButton: {
     padding: 8,
   },
   searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: Colors.card,
     margin: 16,
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 0,
+    paddingVertical: Platform.OS === "ios" ? 10 : 0,
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -597,14 +620,14 @@ const styles = StyleSheet.create({
   },
   noResults: {
     padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   noResultsText: {
     fontSize: 16,
     color: Colors.textLight,
     marginBottom: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   resetButton: {
     backgroundColor: Colors.primary,
@@ -613,7 +636,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   resetButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: "#fff",
+    fontWeight: "600",
   },
 });

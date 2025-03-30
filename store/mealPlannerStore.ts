@@ -266,6 +266,15 @@ function scoreRecipes(
     );
   });
 
+  // Track recipes used on each day to avoid repetition
+  const recipesPerDay: Record<number, Set<string>> = {};
+  currentMealPlan.forEach((meal) => {
+    if (!recipesPerDay[meal.dayIndex]) {
+      recipesPerDay[meal.dayIndex] = new Set<string>();
+    }
+    recipesPerDay[meal.dayIndex].add(meal.recipeId);
+  });
+
   // Process recipes and calculate scores
   return recipes
     .map((recipe) => {
@@ -322,6 +331,17 @@ function scoreRecipes(
       // Check if recipe is a user favorite
       const isFavorite = recipe.likes > 100; // Simplified check for demo purposes
 
+      // Calculate how many days this recipe appears in the meal plan
+      let recipeDayCount = 0;
+      Object.values(recipesPerDay).forEach((recipeSet) => {
+        if (recipeSet.has(recipe.id)) {
+          recipeDayCount++;
+        }
+      });
+
+      // Penalize recipes that already appear in multiple days
+      const repetitionPenalty = Math.pow(recipeDayCount + 1, 2) * 3;
+
       // Calculate the base score - give more weight to items that will expire soon
       const expiryUrgency =
         numItemsWithExpiry > 0
@@ -332,7 +352,8 @@ function scoreRecipes(
       const baseScore =
         (10 / Math.max(1, avgDaysLeft)) * pantryItemsUsed -
         2 * newIngredients +
-        expiryUrgency;
+        expiryUrgency -
+        repetitionPenalty;
 
       // Add bonuses
       const overlapBonus = 3 * overlappingCount;
@@ -354,6 +375,13 @@ function scoreRecipes(
           expiryUrgency,
           closestToExpiry,
           avgDaysLeft,
+          recipeDayCount,
+          repetitionPenalty,
+        },
+        calculatedScore: {
+          baseScore: parseFloat(baseScore.toFixed(2)),
+          overlapBonus: parseFloat(overlapBonus.toFixed(2)),
+          totalScore: parseFloat(finalScore.toFixed(2)),
         },
       };
     })

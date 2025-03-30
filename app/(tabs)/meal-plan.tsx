@@ -49,9 +49,9 @@ import {
   convertToPracticalQuantity,
 } from "@/utils/openaiHelper";
 import { generateId } from "@/utils/helpers";
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
-import HeaderBar from '@/components/HeaderBar';
+import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
+import HeaderBar from "@/components/HeaderBar";
 
 // Define the FoodCategory type
 type FoodCategory =
@@ -1419,8 +1419,8 @@ export default function MealPlanScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
-      <HeaderBar 
+
+      <HeaderBar
         title="Meal Plan"
         subtitle="Recipes to reduce waste"
         rightButtons={
@@ -1430,19 +1430,28 @@ export default function MealPlanScreen() {
               onPress={handleGenerateMealPlan}
               disabled={isLoading || selectedRecipes.length === 0}
             >
-              <Ionicons name="refresh-outline" size={24} color={Colors.textDark} />
+              <Ionicons
+                name="refresh-outline"
+                size={24}
+                color={Colors.textDark}
+              />
             </Pressable>
             <Pressable
               style={styles.iconButton}
               onPress={() => setShowHelpModal(true)}
             >
-              <Ionicons name="information-circle-outline" size={24} color={Colors.textDark} />
+              <Ionicons
+                name="information-circle-outline"
+                size={24}
+                color={Colors.textDark}
+              />
             </Pressable>
-            <Pressable
-              style={styles.iconButton}
-              onPress={navToRecipes}
-            >
-              <Ionicons name="search-outline" size={24} color={Colors.textDark} />
+            <Pressable style={styles.iconButton} onPress={navToRecipes}>
+              <Ionicons
+                name="search-outline"
+                size={24}
+                color={Colors.textDark}
+              />
             </Pressable>
           </>
         }
@@ -1457,7 +1466,7 @@ export default function MealPlanScreen() {
                 onPress={() => {
                   Alert.alert(
                     "Auto-Generate Meal Plan",
-                    "This will create an optimal meal plan for the week based on your pantry items, with a focus on ingredients that will expire soon. Any existing plan will be replaced.",
+                    "This will create an optimal meal plan for the week based on your preferences, with a focus on ingredients that will expire soon. Any existing plan will be replaced.",
                     [
                       { text: "Cancel", style: "cancel" },
                       {
@@ -1518,70 +1527,6 @@ export default function MealPlanScreen() {
                     <ShoppingCart size={16} color="#FFFFFF" />
                     <Text style={styles.optimizeButtonText}>
                       Generate Shopping List from Meal Plan
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.optimizeButton,
-                      { marginTop: 8, backgroundColor: Colors.warning },
-                    ]}
-                    onPress={debugMealPlanData}
-                  >
-                    <Text style={styles.optimizeButtonText}>
-                      Debug: Check Meal Plan Data
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.optimizeButton,
-                      { marginTop: 8, backgroundColor: Colors.danger },
-                    ]}
-                    onPress={() => {
-                      // Create manual fallback ingredients for testing
-                      const testIngredients = [
-                        {
-                          id: "test-1",
-                          name: "Chicken",
-                          amount: 500,
-                          unit: "g",
-                          category: "meat" as FoodCategory,
-                        },
-                        {
-                          id: "test-2",
-                          name: "Rice",
-                          amount: 2,
-                          unit: "cups",
-                          category: "grains" as FoodCategory,
-                        },
-                        {
-                          id: "test-3",
-                          name: "Onion",
-                          amount: 1,
-                          unit: "medium",
-                          category: "vegetables" as FoodCategory,
-                        },
-                      ];
-
-                      // Add these test ingredients to shopping list
-                      addRecipeIngredients(testIngredients);
-
-                      Alert.alert(
-                        "Debug Info",
-                        `Added 3 test ingredients to your shopping list for debugging.`,
-                        [
-                          {
-                            text: "View Shopping List",
-                            onPress: () => router.push("/(tabs)/shopping-list"),
-                          },
-                          { text: "OK", style: "cancel" },
-                        ]
-                      );
-                    }}
-                  >
-                    <Text style={styles.optimizeButtonText}>
-                      Debug: Add Test Ingredients
                     </Text>
                   </TouchableOpacity>
                 </>

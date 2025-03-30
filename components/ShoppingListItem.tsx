@@ -9,7 +9,9 @@ import {
   BookOpen,
   MoveRight,
   ShoppingBag,
+  Edit,
 } from "lucide-react-native";
+import { useRouter } from "expo-router";
 
 interface ShoppingListItemProps {
   item: ShoppingListItemType;
@@ -25,6 +27,7 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
   onMoveToPantry,
 }) => {
   const category = CATEGORIES[item.category];
+  const router = useRouter();
 
   // Format quantity to be cleaner (remove decimal if it's a whole number)
   const formatQuantity = (quantity: number) => {
@@ -49,6 +52,13 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
         },
       ]
     );
+  };
+
+  const handleEdit = () => {
+    router.push({
+      pathname: "/edit-shopping-item",
+      params: { id: item.id },
+    });
   };
 
   return (
@@ -98,6 +108,17 @@ const ShoppingListItem: React.FC<ShoppingListItemProps> = ({
       </View>
 
       <View style={styles.actionsContainer}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionButton,
+            styles.editButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={handleEdit}
+        >
+          <Edit size={16} color="#fff" />
+        </Pressable>
+
         {item.completed && onMoveToPantry && (
           <Pressable
             style={({ pressed }) => [
@@ -208,6 +229,9 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 6,
     marginLeft: 8,
+  },
+  editButton: {
+    backgroundColor: Colors.info,
   },
   moveButton: {
     backgroundColor: Colors.success,
