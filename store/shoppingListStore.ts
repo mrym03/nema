@@ -1,9 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { ShoppingListItem, RecipeIngredient } from "@/types";
+import { ShoppingListItem, RecipeIngredient, FoodItem } from "@/types";
 import { mockShoppingList } from "@/mocks/shoppingList";
 import { generateId } from "@/utils/helpers";
+import { usePantryStore } from "./pantryStore";
 
 interface ShoppingListState {
   items: ShoppingListItem[];
@@ -20,6 +21,7 @@ interface ShoppingListState {
   toggleItemCompleted: (id: string) => void;
   clearCompletedItems: () => void;
   addRecipeIngredients: (ingredients: RecipeIngredient[]) => void;
+  moveItemToPantry: (id: string) => void;
 }
 
 // Helper to determine the best category for an ingredient
@@ -105,9 +107,54 @@ const inferCategoryFromIngredient = (
   return "other";
 };
 
+// Helper function to calculate expiry date based on food category
+const calculateExpiryDate = (category: FoodItem["category"]): string => {
+  const now = new Date();
+  let daysToAdd = 7; // Default 7 days
+
+  // Adjust based on food category
+  switch (category) {
+    case "fruits":
+    case "vegetables":
+      daysToAdd = 7; // 1 week for fresh produce
+      break;
+    case "dairy":
+      daysToAdd = 14; // 2 weeks for dairy
+      break;
+    case "meat":
+    case "seafood":
+      daysToAdd = 5; // 5 days for fresh meat/seafood
+      break;
+    case "bakery":
+      daysToAdd = 5; // 5 days for bakery items
+      break;
+    case "grains":
+    case "canned":
+    case "condiments":
+    case "spices":
+      daysToAdd = 365; // 1 year for shelf-stable items
+      break;
+    case "frozen":
+      daysToAdd = 90; // 3 months for frozen items
+      break;
+    case "snacks":
+    case "beverages":
+      daysToAdd = 30; // 1 month for snacks and beverages
+      break;
+    default:
+      daysToAdd = 14; // 2 weeks default
+  }
+
+  // Calculate expiry date
+  const expiryDate = new Date(now);
+  expiryDate.setDate(expiryDate.getDate() + daysToAdd);
+
+  return expiryDate.toISOString();
+};
+
 export const useShoppingListStore = create<ShoppingListState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       items: mockShoppingList,
       isLoading: false,
       error: null,
@@ -149,6 +196,56 @@ export const useShoppingListStore = create<ShoppingListState>()(
       clearCompletedItems: () => {
         set((state) => ({
           items: state.items.filter((item) => !item.completed),
+        }));
+      },
+
+      // New function to move item from shopping list to pantry
+      moveItemToPantry: (id) => {
+        const state = get();
+        const item = state.items.find((item) => item.id === id);
+
+        if (!item) {
+          console.error("Item not found in shopping list:", id);
+          return;
+        }
+
+        // Get the pantry store
+        const pantryStore = usePantryStore.getState();
+
+        // Convert shopping list item to pantry item
+        const pantryItem: Omit<FoodItem, "id" | "addedAt"> = {
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit: item.unit,
+          expiryDate: calculateExpiryDate(item.category),
+          isOpen: false,
+          notes: item.recipes ? `From recipes: ${item.recipes.join(", ")}` : "",
+          // Add default shelf life values based on category
+          unopenedShelfLife:
+            item.category === "frozen"
+              ? 90
+              : ["canned", "grains", "condiments", "spices"].includes(
+                  item.category
+                )
+              ? 365
+              : 14,
+          openedShelfLife:
+            item.category === "frozen"
+              ? 30
+              : ["canned", "grains", "condiments", "spices"].includes(
+                  item.category
+                )
+              ? 180
+              : 7,
+        };
+
+        // Add to pantry
+        pantryStore.addItem(pantryItem);
+
+        // Remove from shopping list
+        set((state) => ({
+          items: state.items.filter((item) => item.id !== id),
         }));
       },
 
