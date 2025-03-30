@@ -36,9 +36,11 @@ import {
   Coffee,
   UtensilsCrossed,
   Soup,
+  ShoppingCart,
 } from "lucide-react-native";
-import { Recipe } from "@/types";
+import { Recipe, RecipeIngredient } from "@/types";
 import { usePantryStore } from "@/store/pantryStore";
+import { useShoppingListStore } from "@/store/shoppingListStore";
 import EmptyState from "@/components/EmptyState";
 
 // Define a type for recipes with score and analysis information
@@ -123,6 +125,7 @@ export default function MealPlanScreen() {
   } = useMealPlannerStore();
   const { selectedRecipes } = useRecipeStore();
   const { preferences } = usePreferences();
+  const { addRecipeIngredients } = useShoppingListStore();
 
   const [activeDay, setActiveDay] = useState(0);
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null);
@@ -980,6 +983,77 @@ export default function MealPlanScreen() {
     );
   };
 
+  // Add a new function to generate a shopping list from the meal plan
+  const generateShoppingList = () => {
+    if (mealPlan.length === 0) {
+      Alert.alert(
+        "Empty Meal Plan",
+        "Your meal plan is empty. Add some meals first."
+      );
+      return;
+    }
+
+    // Get all recipes in the meal plan
+    const mealRecipes = mealPlan
+      .map((meal) => {
+        return suggestedRecipes.find((recipe) => recipe.id === meal.recipeId);
+      })
+      .filter(Boolean);
+
+    // Collect all ingredients from these recipes
+    const allIngredients: RecipeIngredient[] = [];
+    let totalIngredientsCount = 0;
+
+    mealRecipes.forEach((recipe) => {
+      if (
+        recipe?.extendedIngredients &&
+        recipe.extendedIngredients.length > 0
+      ) {
+        // Get pantry items to filter out ingredients we already have
+        const pantryItems = usePantryStore.getState().items;
+        const pantryItemNames = new Set(
+          pantryItems.map((item) => item.name.toLowerCase())
+        );
+
+        // Filter out ingredients already in pantry
+        const neededIngredients = recipe.extendedIngredients.filter((ing) => {
+          const name = (ing.name || ing.originalName || "").toLowerCase();
+          return (
+            !pantryItemNames.has(name) &&
+            !pantryItems.some((item) => name.includes(item.name.toLowerCase()))
+          );
+        });
+
+        allIngredients.push(...neededIngredients);
+        totalIngredientsCount += neededIngredients.length;
+      }
+    });
+
+    if (allIngredients.length === 0) {
+      Alert.alert(
+        "No Ingredients Needed",
+        "You already have all the ingredients for your meal plan in your pantry!"
+      );
+      return;
+    }
+
+    // Add ingredients to shopping list
+    addRecipeIngredients(allIngredients);
+
+    // Show success message
+    Alert.alert(
+      "Shopping List Generated",
+      `Added ${totalIngredientsCount} ingredients to your shopping list.`,
+      [
+        {
+          text: "View Shopping List",
+          onPress: () => router.push("/shopping-list"),
+        },
+        { text: "Continue", style: "cancel" },
+      ]
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: Colors.primary }]}>
       <HeaderComponent {...headerProps}>
@@ -1054,34 +1128,49 @@ export default function MealPlanScreen() {
               </TouchableOpacity>
 
               {mealPlan.length > 0 && (
-                <TouchableOpacity
-                  style={[
-                    styles.optimizeButton,
-                    { marginTop: 8, backgroundColor: Colors.primary },
-                  ]}
-                  onPress={() => {
-                    Alert.alert(
-                      "Regenerate Meal Plan",
-                      "This will clear your current meal plan and create a new one. Continue?",
-                      [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Regenerate",
-                          onPress: () => {
-                            clearMealPlan();
-                            generateOptimizedMealPlan();
+                <>
+                  <TouchableOpacity
+                    style={[
+                      styles.optimizeButton,
+                      { marginTop: 8, backgroundColor: Colors.primary },
+                    ]}
+                    onPress={() => {
+                      Alert.alert(
+                        "Regenerate Meal Plan",
+                        "This will clear your current meal plan and create a new one. Continue?",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Regenerate",
+                            onPress: () => {
+                              clearMealPlan();
+                              generateOptimizedMealPlan();
+                            },
                           },
-                        },
-                      ]
-                    );
-                  }}
-                  disabled={isGeneratingOptimizedPlan}
-                >
-                  <RefreshCw size={16} color="#FFFFFF" />
-                  <Text style={styles.optimizeButtonText}>
-                    Refresh With Different Recipes
-                  </Text>
-                </TouchableOpacity>
+                        ]
+                      );
+                    }}
+                    disabled={isGeneratingOptimizedPlan}
+                  >
+                    <RefreshCw size={16} color="#FFFFFF" />
+                    <Text style={styles.optimizeButtonText}>
+                      Refresh With Different Recipes
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.optimizeButton,
+                      { marginTop: 8, backgroundColor: Colors.success },
+                    ]}
+                    onPress={generateShoppingList}
+                  >
+                    <ShoppingCart size={16} color="#FFFFFF" />
+                    <Text style={styles.optimizeButtonText}>
+                      Generate Shopping List from Meal Plan
+                    </Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
 
