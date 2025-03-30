@@ -42,7 +42,11 @@ import { Recipe, RecipeIngredient } from "@/types";
 import { usePantryStore } from "@/store/pantryStore";
 import { useShoppingListStore } from "@/store/shoppingListStore";
 import EmptyState from "@/components/EmptyState";
-import { enhanceRecipeIngredients } from "@/utils/openaiHelper";
+import {
+  enhanceRecipeIngredients,
+  normalizeIngredientName,
+  standardizeUnit,
+} from "@/utils/openaiHelper";
 import { generateId } from "@/utils/helpers";
 
 // Define the FoodCategory type
@@ -1089,222 +1093,249 @@ export default function MealPlanScreen() {
 
   // Add a new function to generate a shopping list from the meal plan
   const generateShoppingList = async () => {
-    if (mealPlan.length === 0) {
-      Alert.alert(
-        "Empty Meal Plan",
-        "Your meal plan is empty. Add some meals first."
-      );
-      return;
-    }
-
-    // Show loading indicator
-    setIsGeneratingOptimizedPlan(true);
-
     try {
-      // Get all recipes in the meal plan
-      const mealRecipeIds = mealPlan.map((meal) => meal.recipeId);
+      // Show loading indicator
+      setIsGeneratingOptimizedPlan(true);
 
-      // Count how many times each recipe appears in the meal plan
-      const recipeOccurrences: Record<string, number> = {};
-      mealRecipeIds.forEach((id) => {
-        recipeOccurrences[id] = (recipeOccurrences[id] || 0) + 1;
+      // Collect all unique recipe IDs from the meal plan
+      const allRecipeIds = new Set<string>();
+
+      // The mealPlan is an array of meal items, not an object with days
+      mealPlan.forEach((meal) => {
+        if (meal && meal.recipeId) {
+          allRecipeIds.add(meal.recipeId);
+        }
       });
 
-      // Get unique recipe IDs
-      const uniqueRecipeIds = [...new Set(mealRecipeIds)];
+      console.log(`Found ${allRecipeIds.size} unique recipes in the meal plan`);
+
+      if (allRecipeIds.size === 0) {
+        setIsGeneratingOptimizedPlan(false);
+        Alert.alert(
+          "No Recipes Found",
+          "Add some recipes to your meal plan first!"
+        );
+        return;
+      }
+
+      // Get recipe details for all recipe IDs
+      const allRecipes: ScoredRecipe[] = [];
+      const { suggestedRecipes } = useMealPlannerStore.getState();
+
+      for (const recipeId of allRecipeIds) {
+        const recipe = suggestedRecipes.find((r) => r.id === recipeId);
+        if (recipe) {
+          allRecipes.push(recipe);
+        }
+      }
 
       console.log(
-        `Processing ${uniqueRecipeIds.length} unique recipes for shopping list with repetitions`
+        `Found ${allRecipes.length} recipes from ${allRecipeIds.size} unique IDs`
       );
 
-      // Log recipe occurrences for debugging
-      Object.entries(recipeOccurrences).forEach(([id, count]) => {
-        const recipe = suggestedRecipes.find((r) => r.id === id);
-        console.log(
-          `Recipe "${
-            recipe?.title || id
-          }" appears ${count} times in the meal plan`
+      if (allRecipes.length === 0) {
+        setIsGeneratingOptimizedPlan(false);
+        Alert.alert(
+          "No Recipe Data Found",
+          "Could not find details for the recipes in your meal plan. Try refreshing your recipes."
         );
-      });
+        return;
+      }
 
-      // Get pantry items
+      // Get pantry items to check against shopping list
       const pantryItems = usePantryStore.getState().items;
       console.log(
-        `Found ${pantryItems.length} pantry items to subtract from shopping list`
+        `Found ${pantryItems.length} items in pantry to check against`
       );
 
-      // Find recipes in suggested recipes
-      const recipesToProcess = uniqueRecipeIds
-        .map((id) => suggestedRecipes.find((recipe) => recipe.id === id))
-        .filter(Boolean);
-
-      // Enhance recipes with OpenAI to get proper ingredient quantities and units
+      // Process recipes through OpenAI to enhance ingredients with proper quantities and units
+      console.log("Enhancing recipes with OpenAI...");
       const enhancedRecipes = await Promise.all(
-        recipesToProcess.map(async (recipe) => {
-          console.log(
-            `Enhancing recipe: ${
-              recipe?.title || (recipe as any)?.strMeal || recipe?.id
-            }`
-          );
-          return enhanceRecipeIngredients(recipe as any);
+        allRecipes.map(async (recipe) => {
+          return await enhanceRecipeIngredients(recipe);
         })
       );
-
       console.log(`Enhanced ${enhancedRecipes.length} recipes with OpenAI`);
 
-      // Collect all ingredients from these recipes, accounting for repetitions
-      const ingredientsByName: Record<
+      // Collect all ingredients from all recipes
+      const ingredientMap = new Map<
         string,
         {
           name: string;
           amount: number;
           unit: string;
-          category: FoodCategory;
-          recipes: string[];
+          recipeName: string;
         }
-      > = {};
+      >();
 
       enhancedRecipes.forEach((recipe) => {
         if (
-          !recipe?.extendedIngredients ||
-          recipe.extendedIngredients.length === 0
+          recipe.extendedIngredients &&
+          recipe.extendedIngredients.length > 0
         ) {
-          console.log(
-            `No ingredients found for recipe: ${recipe?.title || recipe?.id}`
-          );
-          return;
-        }
+          recipe.extendedIngredients.forEach((ingredient) => {
+            // Skip ingredients without a name
+            if (!ingredient.name) return;
 
-        const recipeTitle = recipe.title || recipe.strMeal || "Unknown Recipe";
-        const repetitionCount = recipeOccurrences[recipe.id] || 1;
+            // Normalize ingredient name for comparison
+            const normalizedName = normalizeIngredientName(ingredient.name);
 
-        console.log(
-          `Recipe "${recipeTitle}" has ${recipe.extendedIngredients.length} ingredients and appears ${repetitionCount} times`
-        );
+            // Standardize the unit
+            const standardUnit = standardizeUnit(ingredient.unit || "item");
 
-        // Process each ingredient, multiplying by the number of repetitions
-        recipe.extendedIngredients.forEach((ingredient) => {
-          if (!ingredient.name) return;
+            // Create a unique key that combines the normalized name and standard unit
+            const key = `${normalizedName}|${standardUnit}`;
 
-          const name = ingredient.name.toLowerCase();
-          const amount = Number(ingredient.amount || 1) * repetitionCount;
-          const unit = ingredient.unit || "item";
+            if (ingredientMap.has(key)) {
+              // If ingredient already exists with the same unit, add the amounts
+              const existing = ingredientMap.get(key)!;
+              existing.amount += Number(ingredient.amount) || 1;
+            } else {
+              // Check if the ingredient is already in the pantry with sufficient quantity
+              const pantryItem = pantryItems.find(
+                (item) =>
+                  normalizeIngredientName(item.name) === normalizedName &&
+                  (item.unit === standardUnit || !item.unit || !standardUnit)
+              );
 
-          // Categorize the ingredient based on its name
-          const category = categorizeIngredient(ingredient.name);
+              // Skip adding to shopping list if sufficient quantity in pantry
+              if (
+                pantryItem &&
+                pantryItem.quantity >= (Number(ingredient.amount) || 1)
+              ) {
+                console.log(
+                  `Skipping ${ingredient.name} - found in pantry with sufficient quantity`
+                );
+                return;
+              }
 
-          // If this ingredient already exists with the same unit, add to it
-          const key = `${name}|${unit}`;
-          if (ingredientsByName[key]) {
-            ingredientsByName[key].amount += amount;
-            if (!ingredientsByName[key].recipes.includes(recipeTitle)) {
-              ingredientsByName[key].recipes.push(recipeTitle);
+              // If the pantry has some but not enough, reduce the amount needed
+              const amountNeeded = pantryItem
+                ? Math.max(
+                    0,
+                    (Number(ingredient.amount) || 1) - pantryItem.quantity
+                  )
+                : Number(ingredient.amount) || 1;
+
+              // Only add to shopping list if we need more
+              if (amountNeeded > 0) {
+                ingredientMap.set(key, {
+                  name: ingredient.name,
+                  amount: amountNeeded,
+                  unit: standardUnit,
+                  recipeName:
+                    recipe.strMeal || recipe.title || "Unknown Recipe",
+                });
+              }
             }
-          } else {
-            ingredientsByName[key] = {
-              name: ingredient.name,
-              amount,
-              unit,
-              category,
-              recipes: [recipeTitle],
-            };
-          }
-        });
+          });
+        } else {
+          console.log(
+            `Recipe "${recipe.strMeal || recipe.title}" has no ingredients!`
+          );
+        }
       });
 
-      // Convert to array and subtract pantry items
-      let shoppingList = Object.values(ingredientsByName);
-
-      console.log(
-        `Created ${shoppingList.length} total ingredients before pantry subtraction`
-      );
-
-      // Subtract pantry items from shopping list
-      const finalShoppingList = shoppingList.map((item) => {
-        // Find matching pantry items (case insensitive)
-        const matchingPantryItems = pantryItems.filter(
-          (pantryItem) =>
-            pantryItem.name.toLowerCase().includes(item.name.toLowerCase()) ||
-            item.name.toLowerCase().includes(pantryItem.name.toLowerCase())
-        );
-
-        // If we have matching pantry items with the same unit, subtract
-        let remainingAmount = item.amount;
-
-        matchingPantryItems.forEach((pantryItem) => {
-          if (pantryItem.unit.toLowerCase() === item.unit.toLowerCase()) {
-            console.log(
-              `Subtracting ${pantryItem.quantity} ${pantryItem.unit} of ${pantryItem.name} from shopping list`
-            );
-            remainingAmount = Math.max(
-              0,
-              remainingAmount - pantryItem.quantity
-            );
-          }
-        });
-
-        // If we have enough in pantry, mark as fulfilled
-        return {
-          ...item,
-          amount: remainingAmount,
-          fulfilled: remainingAmount <= 0,
-        };
-      });
-
-      // Filter out items we already have enough of in the pantry
-      const itemsToShop = finalShoppingList.filter(
-        (item) => !item.fulfilled && item.amount > 0
-      );
-
-      console.log(
-        `Final shopping list has ${itemsToShop.length} items after pantry subtraction`
-      );
-
-      // Convert to RecipeIngredient format for the shopping list store
-      const ingredientsToAdd = itemsToShop.map((item) => ({
+      // Convert to shopping list items
+      const shoppingItems: RecipeIngredient[] = Array.from(
+        ingredientMap.values()
+      ).map((ingredient) => ({
         id: generateId(),
-        name: item.name,
-        amount: item.amount,
-        unit: item.unit,
-        category: item.category,
-        recipeName: item.recipes.join(", "),
+        name: ingredient.name,
+        quantity: ingredient.amount,
+        unit: ingredient.unit,
+        completed: false,
+        addedOn: new Date().toISOString(),
+        category: categorizeIngredient(ingredient.name),
+        recipeName: ingredient.recipeName,
       }));
 
-      if (ingredientsToAdd.length === 0) {
-        Alert.alert(
-          "Nothing to Buy",
-          "All the ingredients for your meal plan are already in your pantry!"
-        );
+      console.log(`Generated ${shoppingItems.length} shopping list items`);
+
+      if (shoppingItems.length === 0) {
         setIsGeneratingOptimizedPlan(false);
+        Alert.alert(
+          "No Ingredients Found",
+          "Could not generate a shopping list from your meal plan"
+        );
         return;
       }
 
-      // Add ingredients to shopping list
-      addRecipeIngredients(ingredientsToAdd);
+      // Add items to shopping list
+      addRecipeIngredients(shoppingItems);
 
-      // Show success message with navigation options
+      // Stop loading indicator
+      setIsGeneratingOptimizedPlan(false);
+
+      // Notification of success
       Alert.alert(
         "Shopping List Generated",
-        `Added ${ingredientsToAdd.length} ingredient${
-          ingredientsToAdd.length !== 1 ? "s" : ""
-        } to your shopping list.`,
+        `Added ${shoppingItems.length} items to your shopping list`,
         [
           {
-            text: "View Shopping List",
+            text: "View List",
             onPress: () => router.push("/(tabs)/shopping-list"),
           },
-          { text: "Continue", style: "cancel" },
+          {
+            text: "OK",
+            style: "cancel",
+          },
         ]
       );
     } catch (error) {
       console.error("Error generating shopping list:", error);
+      setIsGeneratingOptimizedPlan(false);
       Alert.alert(
         "Error",
-        "There was a problem generating your shopping list. Please try again."
+        "Failed to generate shopping list. Please try again."
       );
-    } finally {
-      setIsGeneratingOptimizedPlan(false);
     }
+  };
+
+  const debugMealPlanData = () => {
+    console.log("DEBUG - Meal Plan Structure:");
+    console.log(
+      `Meal Plan type: ${Array.isArray(mealPlan) ? "Array" : typeof mealPlan}`
+    );
+    console.log(
+      `Meal Plan length: ${Array.isArray(mealPlan) ? mealPlan.length : "N/A"}`
+    );
+
+    if (Array.isArray(mealPlan) && mealPlan.length > 0) {
+      console.log("First meal in plan:", JSON.stringify(mealPlan[0]));
+
+      const recipeId = mealPlan[0].recipeId;
+      console.log(`Looking for recipe with ID: ${recipeId}`);
+
+      const recipe = suggestedRecipes.find((r) => r.id === recipeId);
+      console.log(`Recipe found: ${!!recipe}`);
+
+      if (recipe) {
+        console.log("Recipe data types:");
+        console.log(`- ID type: ${typeof recipe.id}`);
+        console.log(`- Recipe ID from meal plan type: ${typeof recipeId}`);
+      }
+    }
+
+    console.log("Suggested Recipes info:");
+    console.log(`Count: ${suggestedRecipes.length}`);
+    if (suggestedRecipes.length > 0) {
+      console.log(
+        `First suggested recipe ID: ${
+          suggestedRecipes[0].id
+        } (${typeof suggestedRecipes[0].id})`
+      );
+    }
+
+    Alert.alert(
+      "Debug Info",
+      `Meal Plan: ${
+        Array.isArray(mealPlan) ? mealPlan.length : 0
+      } items\nSuggested Recipes: ${
+        suggestedRecipes.length
+      } items\nCheck console for detailed logs`,
+      [{ text: "OK" }]
+    );
   };
 
   return (
@@ -1427,81 +1458,60 @@ export default function MealPlanScreen() {
                   <TouchableOpacity
                     style={[
                       styles.optimizeButton,
+                      { marginTop: 8, backgroundColor: Colors.warning },
+                    ]}
+                    onPress={debugMealPlanData}
+                  >
+                    <Text style={styles.optimizeButtonText}>
+                      Debug: Check Meal Plan Data
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.optimizeButton,
                       { marginTop: 8, backgroundColor: Colors.danger },
                     ]}
                     onPress={() => {
-                      // Debug button to inspect a recipe
-                      if (mealPlan.length > 0 && suggestedRecipes.length > 0) {
-                        const firstMealId = mealPlan[0].recipeId;
-                        const recipe = suggestedRecipes.find(
-                          (r) => r.id === firstMealId
-                        );
+                      // Create manual fallback ingredients for testing
+                      const testIngredients = [
+                        {
+                          id: "test-1",
+                          name: "Chicken",
+                          amount: 500,
+                          unit: "g",
+                          category: "meat" as FoodCategory,
+                        },
+                        {
+                          id: "test-2",
+                          name: "Rice",
+                          amount: 2,
+                          unit: "cups",
+                          category: "grains" as FoodCategory,
+                        },
+                        {
+                          id: "test-3",
+                          name: "Onion",
+                          amount: 1,
+                          unit: "medium",
+                          category: "vegetables" as FoodCategory,
+                        },
+                      ];
 
-                        if (recipe) {
-                          console.log(
-                            "DEBUG - Recipe structure:",
-                            JSON.stringify(recipe)
-                          );
-                          console.log("Recipe keys:", Object.keys(recipe));
-                          console.log(
-                            "Has strIngredient1:",
-                            !!(recipe as any).strIngredient1
-                          );
-                          console.log(
-                            "Has extendedIngredients:",
-                            !!recipe.extendedIngredients
-                          );
+                      // Add these test ingredients to shopping list
+                      addRecipeIngredients(testIngredients);
 
-                          if (recipe.extendedIngredients) {
-                            console.log(
-                              "extendedIngredients count:",
-                              recipe.extendedIngredients.length
-                            );
-                          }
-
-                          // Create manual fallback ingredients for testing
-                          const testIngredients = [
-                            {
-                              id: "test-1",
-                              name: "Chicken",
-                              amount: 500,
-                              unit: "g",
-                            },
-                            {
-                              id: "test-2",
-                              name: "Rice",
-                              amount: 2,
-                              unit: "cups",
-                            },
-                            {
-                              id: "test-3",
-                              name: "Onion",
-                              amount: 1,
-                              unit: "medium",
-                            },
-                          ];
-
-                          // Add these test ingredients to shopping list
-                          addRecipeIngredients(testIngredients);
-
-                          Alert.alert(
-                            "Debug Info",
-                            `Added 3 test ingredients to your shopping list for debugging. Check console for more details.`,
-                            [
-                              {
-                                text: "View Shopping List",
-                                onPress: () =>
-                                  router.push("/(tabs)/shopping-list"),
-                              },
-                              { text: "OK", style: "cancel" },
-                            ]
-                          );
-                        } else {
-                          Alert.alert("Debug", "No recipe found");
-                        }
-                      } else {
-                        Alert.alert("Debug", "No meals in plan");
-                      }
+                      Alert.alert(
+                        "Debug Info",
+                        `Added 3 test ingredients to your shopping list for debugging.`,
+                        [
+                          {
+                            text: "View Shopping List",
+                            onPress: () => router.push("/(tabs)/shopping-list"),
+                          },
+                          { text: "OK", style: "cancel" },
+                        ]
+                      );
                     }}
                   >
                     <Text style={styles.optimizeButtonText}>

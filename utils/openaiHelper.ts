@@ -1,5 +1,12 @@
 import OpenAI from "openai";
-import { RecipeIngredient } from "@/types";
+import {
+  RecipeIngredient,
+  FoodItem,
+  ShoppingListItem,
+  FoodCategory,
+} from "@/types";
+import { usePantryStore } from "@/store/pantryStore";
+import { useShoppingListStore } from "@/store/shoppingListStore";
 
 // Initialize OpenAI client - use environment variable in production
 const OPENAI_API_KEY =
@@ -13,6 +20,98 @@ console.log(
 const openai = new OpenAI({
   apiKey: OPENAI_API_KEY,
 });
+
+// Helper function to normalize ingredient names for better matching
+export function normalizeIngredientName(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim()
+      // Remove plurals and common suffixes
+      .replace(/s$|es$/, "")
+      // Remove filler words
+      .replace(
+        /\b(fresh|dried|frozen|organic|raw|cooked|diced|sliced|minced|chopped)\b/g,
+        ""
+      )
+      .trim()
+  );
+}
+
+// Helper function to standardize units
+export function standardizeUnit(unit: string): string {
+  const unitMap: Record<string, string> = {
+    // Weight
+    pound: "lb",
+    pounds: "lb",
+    lbs: "lb",
+    ounce: "oz",
+    ounces: "oz",
+    gram: "g",
+    grams: "g",
+    kilogram: "kg",
+    kilograms: "kg",
+
+    // Volume
+    cup: "cups",
+    tablespoon: "tbsp",
+    tablespoons: "tbsp",
+    tsp: "tsp",
+    teaspoon: "tsp",
+    teaspoons: "tsp",
+    "fluid ounce": "fl oz",
+    "fluid ounces": "fl oz",
+    milliliter: "ml",
+    milliliters: "ml",
+    liter: "l",
+    liters: "l",
+    gallon: "gal",
+    gallons: "gal",
+    quart: "qt",
+    quarts: "qt",
+    pint: "pt",
+    pints: "pt",
+
+    // Count
+    piece: "pcs",
+    pieces: "pcs",
+    slice: "slices",
+    can: "cans",
+    jar: "jars",
+    package: "packages",
+    pkg: "packages",
+  };
+
+  const normalizedUnit = unit.toLowerCase().trim();
+  return unitMap[normalizedUnit] || normalizedUnit;
+}
+
+// Function to get existing ingredient information from pantry and shopping list
+function getExistingIngredients(): {
+  pantryIngredients: { name: string; unit: string }[];
+  shoppingIngredients: { name: string; unit: string }[];
+} {
+  // Get pantry items
+  const pantryItems = usePantryStore.getState()?.items || [];
+
+  // Get shopping list items
+  const shoppingItems = useShoppingListStore.getState()?.items || [];
+
+  // Format pantry items
+  const pantryIngredients = pantryItems.map((item) => ({
+    name: item.name,
+    unit: item.unit,
+  }));
+
+  // Format shopping list items
+  const shoppingIngredients = shoppingItems.map((item) => ({
+    name: item.name,
+    unit: item.unit,
+  }));
+
+  return { pantryIngredients, shoppingIngredients };
+}
 
 interface RecipeData {
   idMeal?: string;
@@ -113,11 +212,43 @@ interface EnhancedIngredient {
   name: string;
   amount: number;
   unit: string;
+  category?: string;
 }
 
 interface OpenAIResponse {
   ingredients?: EnhancedIngredient[];
   [key: string]: any;
+}
+
+// Function to convert generic category string to FoodCategory type
+function mapToFoodCategory(category: string): FoodCategory {
+  const categoryMap: Record<string, FoodCategory> = {
+    "Meat & Seafood": category.toLowerCase().includes("seafood")
+      ? "seafood"
+      : "meat",
+    Produce: category.toLowerCase().includes("fruit") ? "fruits" : "vegetables",
+    "Dairy & Eggs": "dairy",
+    "Bakery & Bread": "bakery",
+    "Pantry Staples": category.toLowerCase().includes("spice")
+      ? "spices"
+      : category.toLowerCase().includes("condiment")
+      ? "condiments"
+      : category.toLowerCase().includes("can")
+      ? "canned"
+      : "grains",
+    Beverages: "beverages",
+    "Frozen Foods": "frozen",
+    Other: "other",
+  };
+
+  // Find the matching food category or return "other" as default
+  for (const [key, value] of Object.entries(categoryMap)) {
+    if (category.includes(key)) {
+      return value;
+    }
+  }
+
+  return "other";
 }
 
 // Use GPT-4o-mini to enhance recipe ingredients with structured quantities and units
@@ -180,6 +311,9 @@ export async function enhanceRecipeIngredients(
   );
 
   try {
+    // Get existing ingredients from pantry and shopping list for context
+    const { pantryIngredients, shoppingIngredients } = getExistingIngredients();
+
     // Prepare ingredient data for the prompt
     const ingredientsList = recipeWithIngredients.extendedIngredients
       .map((ing: RecipeIngredient) => {
@@ -190,7 +324,13 @@ export async function enhanceRecipeIngredients(
 
     console.log("Ingredient list for OpenAI:", ingredientsList);
 
-    // Create the prompt for GPT-4o-mini
+    // Format existing ingredients for the prompt
+    const existingIngredientsInfo = [
+      ...pantryIngredients.map((item) => `${item.name} (unit: ${item.unit})`),
+      ...shoppingIngredients.map((item) => `${item.name} (unit: ${item.unit})`),
+    ].join("\n");
+
+    // Create the prompt for GPT-4o-mini with context about existing ingredients
     const prompt = `
 Recipe: ${recipe.strMeal || recipe.title || "Unknown Recipe"}
 
@@ -200,22 +340,39 @@ ${ingredientsList}
 I need you to analyze this recipe and extract precise quantities and units for each ingredient.
 For ingredients without explicit measurements, please estimate reasonable quantities based on the recipe name and typical cooking standards.
 
-For example:
-- "2 large eggs" → amount: 2, unit: "large"
-- "1/2 cup flour" → amount: 0.5, unit: "cup" 
-- "Salt to taste" → amount: 0.25, unit: "tsp"
-- "banana" → amount: 2, unit: "medium"
+IMPORTANT: Below are ingredients that already exist in the user's pantry or shopping list. 
+When parsing ingredients from the recipe, use the EXACT SAME NAME and UNIT for any matching ingredients:
+${existingIngredientsInfo}
 
-If the recipe uses measurements like "a handful" or "a pinch", convert to standard units.
-Always specify an amount and unit for every ingredient, using your culinary knowledge to make reasonable estimates when measurements are vague or missing.
+Guidelines:
+1. Use singular form for ingredient names (e.g., "banana" not "bananas") for consistency
+2. Use standardized units (e.g., "lb" not "pound" or "pounds")
+3. For ingredients already in the pantry/shopping list, match their exact name and unit
+4. Be consistent with units for the same ingredient (don't use "cups" and "oz" for the same ingredient)
+5. Assign each ingredient to one of these categories:
+   - "Meat & Seafood" (beef, chicken, fish, etc.)
+   - "Produce" (fruits, vegetables, herbs)
+   - "Dairy & Eggs" (milk, cheese, yogurt, eggs)
+   - "Bakery & Bread" (bread, bagels, pastries)
+   - "Pantry Staples" (rice, pasta, oil, spices, canned goods)
+   - "Beverages" (water, juice, soda, coffee)
+   - "Frozen Foods" (ice cream, frozen vegetables)
+   - "Other" (anything that doesn't fit above)
+
+For example:
+- "2 large eggs" → name: "egg", amount: 2, unit: "large", category: "Dairy & Eggs"
+- "1/2 cup flour" → name: "flour", amount: 0.5, unit: "cups", category: "Pantry Staples"
+- "Salt to taste" → name: "salt", amount: 0.25, unit: "tsp", category: "Pantry Staples"
+- "banana" → name: "banana", amount: 2, unit: "medium", category: "Produce"
 
 Return as JSON in this format:
 {
   "ingredients": [
     {
-      "name": "ingredient name",
+      "name": "ingredient name (singular form)",
       "amount": numeric_value,
-      "unit": "unit of measurement"
+      "unit": "unit of measurement (standardized)",
+      "category": "category from the list above"
     },
     ...
   ]
@@ -229,7 +386,7 @@ Return as JSON in this format:
         {
           role: "system",
           content:
-            "You are a professional chef and recipe expert who specializes in parsing recipe ingredients into structured data with precise quantities and units. Always provide specific amounts and units for each ingredient, making reasonable estimates when needed.",
+            "You are a professional chef and recipe expert who specializes in parsing recipe ingredients into structured data with precise quantities and units. You aim for consistency across ingredients, ensuring the same ingredients use the same name format (singular form) and unit measurements across recipes.",
         },
         { role: "user", content: prompt },
       ],
@@ -262,11 +419,17 @@ Return as JSON in this format:
         `Got ${enhancedData.ingredients.length} enhanced ingredients from OpenAI`
       );
 
-      // Instead of trying to match existing ingredients, REPLACE them with OpenAI's ingredients
+      // Process and standardize the ingredients
       const newIngredients: RecipeIngredient[] = enhancedData.ingredients.map(
         (enhanced: EnhancedIngredient, index) => {
+          // Standardize the unit for consistency
+          const standardizedUnit = standardizeUnit(enhanced.unit || "item");
+
+          // Map the category string to FoodCategory type
+          const foodCategory = mapToFoodCategory(enhanced.category || "Other");
+
           console.log(
-            `Adding enhanced ingredient "${enhanced.name}" with amount: ${enhanced.amount}, unit: ${enhanced.unit}`
+            `Adding enhanced ingredient "${enhanced.name}" with amount: ${enhanced.amount}, unit: ${standardizedUnit}, category: ${foodCategory}`
           );
 
           return {
@@ -274,11 +437,13 @@ Return as JSON in this format:
             name: enhanced.name,
             originalName: enhanced.name,
             original:
-              `${enhanced.amount} ${enhanced.unit} ${enhanced.name}`.trim(),
+              `${enhanced.amount} ${standardizedUnit} ${enhanced.name}`.trim(),
             amount: enhanced.amount || 1,
-            unit: enhanced.unit || "item",
+            unit: standardizedUnit,
             // Add recipe name to track the source
             recipeName: recipe.strMeal || recipe.title || "Unknown Recipe",
+            // Add food category
+            category: foodCategory,
           };
         }
       );
